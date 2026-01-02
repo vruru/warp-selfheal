@@ -22,18 +22,20 @@ English | [中文](README.md)
 * * *
 
 ## Update Information
+2026.01.02 mehu.sh v3.2.0 / warp-go.sh v1.3.0 1. Account: Remove deprecated WARP+ and Teams account types from installation and upgrade processes (warp a) following Cloudflare's adjustments; 2. Bug Fix: Resolve networking breakdown by correcting routing rule handling during Linux Client removal in proxy mode; 3. Performance: Implement self-hosted IP API to significantly improve IP information retrieval speed; 4. Cleanup: Remove obsolete script prompts and redundant UI messages; 5. IP-Brushing Logic: Adjust default Netflix unlock preference from IPv4 to IPv6
+
 2025.09.10 menu.sh v3.1.8 Enhance the script's compatibility with Arch Linux and EndeavourOS systems.
 
 2025.08.24 menu.sh v3.1.7 1. Added support for installing Warp on Ubuntu 24.04 and later versions. Thanks to the solution provided by community member [Michaol]; 2. Added support for Client installation on Debian 13. Thanks to the feedback from user [ainp]
-
-2025.08.11 menu.sh v3.1.6 / warp-go.sh v1.2.4 Remove best endpoint feature to adapt to official adjustments;
-
-2025.03.24 menu.sh v3.1.5 1. Client's Warp mode (network interface) has been fixed to deal with the problem that it does not work after reboot; 2. Fixed the regularity of Team IPv6 judgment;
 
 <details>
     <summary>Historical Updates (click to expand or collapse)</summary>
 <br>
 
+>2025.08.11 menu.sh v3.1.6 / warp-go.sh v1.2.4 Remove best endpoint feature to adapt to official adjustments;
+>
+>2025.03.24 menu.sh v3.1.5 1. Client's Warp mode (network interface) has been fixed to deal with the problem that it does not work after reboot; 2. Fixed the regularity of Team IPv6 judgment;
+>
 >2024.12.24 menu.sh v3.1.4 / warp-go.sh v1.2.3 Support Docker to externally listen on 0.0.0.0/0 without requiring the use of host network mode. Thanks to Bro @Anthony_Tel;
 >
 >2024.9.24 menu.sh v3.1.3 The Linux Client adds the MASQUE protocol option, available in both Proxy mode (menu 5) and WarpProxy mode (menu 14);
@@ -274,8 +276,6 @@ warp [option] [lisence]
   | u | Uninstall WARP |
   | n | For brushing WARP network when disconnected (WARP bug) |
   | b | Upgrade kernel, enable BBR and DD |
-  | a | Upgrade free WARP account to WARP+ |
-  | a lisence | Add WARP+ Lisence on the basis of the above, such as ```bash menu.sh a N5670ljg-sS9jD334-6o6g4M9F``` |
   | p | Brush Warp+ traffic |
   | c | Install WARP Linux Client, enable Socks5 proxy mode |
   | l | Install WARP Linux Client, enable WARP mode |
@@ -318,8 +318,6 @@ warp-go [option] [lisence]
   | d | Original status -> WARP dual stack |
   | o | warp-go switch, the script actively judges the current status, automatically turns on or off |
   | u | Uninstall warp-go |
-  | a | Upgrade free WARP account to WARP+ |
-  | a lisence name| Add WARP+ Lisence and device name on the basis of the above, such as ```bash menu.sh a N5670ljg-sS9jD334-6o6g4M9F Goodluck``` |
   | v | Sync script to the latest version |
   | Others or empty value| Menu interface |
 
