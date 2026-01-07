@@ -410,29 +410,17 @@ check_dependencies() {
   if [ "$SYSTEM" = 'Alpine' ]; then
     CHECK_WGET=$(wget 2>&1 | head -n 1)
     grep -qi 'busybox' <<< "$CHECK_WGET" && ${PACKAGE_INSTALL[int]} wget >/dev/null 2>&1
-    DEPS_CHECK=("ping" "curl" "grep" "bash" "ip" "virt-what" "xxd" "openssl")
-    DEPS_INSTALL=("iputils-ping" "curl" "grep" "bash" "iproute2" "virt-what" "xxd" "openssl")
+    DEPS_CHECK=("ping" "curl" "grep" "bash" "ip" "virt-what")
+    DEPS_INSTALL=("iputils-ping" "curl" "grep" "bash" "iproute2" "virt-what")
   else
     # 对于三大系统需要的依赖
-    DEPS_CHECK=("ping" "wget" "curl" "systemctl" "ip" "xxd" "openssl")
-    DEPS_INSTALL=("iputils-ping" "wget" "curl" "systemctl" "iproute2" "xxd" "openssl")
+    DEPS_CHECK=("ping" "wget" "curl" "systemctl" "ip")
+    DEPS_INSTALL=("iputils-ping" "wget" "curl" "systemctl" "iproute2")
   fi
 
   for g in "${!DEPS_CHECK[@]}"; do
     [ ! -x "$(type -p ${DEPS_CHECK[g]})" ] && [[ ! "${DEPS[@]}" =~ "${DEPS_INSTALL[g]}" ]] && DEPS+=(${DEPS_INSTALL[g]})
   done
-
-  # 检查 JSON 格式化工具
-  if [ -x "$(type -p python3)" ]; then
-    JSON_TOOL="python3 -m json.tool"
-  elif [ -x "$(type -p python)" ]; then
-    JSON_TOOL="python -m json.tool"
-  elif [ -x "$(type -p jq)" ]; then
-    JSON_TOOL="jq"
-  else
-    JSON_TOOL="jq"
-    DEPS+=("jq")
-  fi
 
   if [ "${#DEPS[@]}" -ge 1 ]; then
     info "\n $(text 7) ${DEPS[@]} \n"
@@ -481,47 +469,10 @@ warp_api(){
   fi
 
   case "$RUN" in
-    register )
-      # 生成 wireguard 公私钥，并且补上 private key
-      if [[ -x "$(type -p openssl)" && -x "$(type -p xxd)" && -x "$(type -p base64)" ]]; then
-        local KEY_PAIR=$(openssl genpkey -algorithm X25519 | openssl pkey -text -noout)
-        local PRIVATE_KEY=$(echo $KEY_PAIR | sed 's/.*priv:\(.*\)pub.*/\1/; s/ //g' | xxd -r -p | base64)
-        local PUBLIC_KEY=$(echo $KEY_PAIR | sed 's/.*pub://; s/ //g'| xxd -r -p | base64)
-      else
-        local WG_API=$(curl -m5 -sSL "https://warp.cloudflare.now.cc/?run=key&format=yaml")
-        local PRIVATE_KEY=$(awk 'NR==2 {print $2}' <<< "$WG_API")
-        local PUBLIC_KEY=$(awk 'NR==1 {print $2}' <<< "$WG_API")
-      fi
-
-      if grep -q '.' <<< "$PRIVATE_KEY" && grep -q '.' <<< "$PUBLIC_KEY"; then
-        local INSTALL_ID=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 22)
-        local FCM_TOKEN="${INSTALL_ID}:APA91b$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 134)"
-
-        # 由于某些 IP 存在被限制注册，所以使用不停的注册来处理，超过一定次数则使用预设账户
-        until grep -q 'account' <<< "$ACCOUNT"; do
-          ((REGISTER_ERROR_TIME++))
-          if [ "$REGISTER_ERROR_TIME" -gt 30 ]; then
-            break
-          elif [ "$REGISTER_ERROR_TIME" -gt 1 ]; then
-            sleep 5
-          fi
-          local ACCOUNT=$(curl --request POST 'https://api.cloudflareclient.com/v0a2158/reg' \
-            --silent \
-            --location \
-            --tlsv1.3 \
-            --header 'User-Agent: okhttp/3.12.1' \
-            --header 'CF-Client-Version: a-6.10-2158' \
-            --header 'Content-Type: application/json' \
-            --data '{"key":"'${PUBLIC_KEY}'","install_id":"'${INSTALL_ID}'","fcm_token":"'${FCM_TOKEN}'","tos":"'$(date +"%Y-%m-%dT%H:%M:%S.000Z")'","model":"PC","serial_number":"'${INSTALL_ID}'","locale":"zh_CN"}')
-        done
-
-        if grep -q 'account' <<< "$ACCOUNT"; then
-          local CLIENT_ID=$(sed 's/.*"client_id":"\([^\"]\+\)\".*/\1/' <<<"$ACCOUNT")
-          local RESERVED=$(echo "$CLIENT_ID" | base64 -d | xxd -p | fold -w2 | while read HEX; do printf '%d ' "0x${HEX}"; done | awk '{print "["$1", "$2", "$3"]"}')
-
-          $JSON_TOOL <<< "$ACCOUNT" 2>&1 | sed "/\"key\"/a\    \"private_key\": \"$PRIVATE_KEY\"," | sed "/\"client_id\"/a\        \"reserved\": $RESERVED,"
-        else
-          echo '{
+    register )     
+      local ACCOUNT=$(curl --retry 50 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.nyc.mn/?run=register")
+      grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT" ||
+      echo '{
   "id": "b0fe9b24-3396-486e-a12d-c194dbbb7bfb",
   "type": "a",
   "model": "PC",
@@ -609,8 +560,6 @@ warp_api(){
     "tunnel_protocol": "masque"
   }
 }'
-        fi
-      fi
       ;;
     cancel )
       # 只保留 Teams 或者预设账户，删除其他账户
@@ -1170,6 +1119,11 @@ uninstall() {
   done
 
   # 删除本脚本安装在 /etc/wireguard/ 下的所有文件，如果删除后目录为空，一并把目录删除
+  if [ -s /usr/bin/wg-quick.origin ]; then
+    # 检查是否需要还原wg-quick.origin文件
+    grep -q '^#[[:space:]]\+add_if$' /usr/bin/wg-quick.origin && sed 's/#\([[:space:]]\+add_if\)/\1/; /wireguard-go "$INTERFACE"/d' /usr/bin/wg-quick
+    mv -f /usr/bin/wg-quick.origin /usr/bin/wg-quick
+  fi
   rm -f /usr/bin/wg-quick.{origin,reserved}
   rm -f /tmp/{best_mtu,wireguard-go-*}
   rm -f /etc/wireguard/{warp-account.conf,warp_unlock.sh,warp.conf,up,down,proxy.conf,menu.sh,language,NonGlobalUp.sh,NonGlobalDown.sh}
@@ -2028,13 +1982,14 @@ EOF
       grep -q "Arch" <<< "$SYSTEM" && ! grep -q 'cmd resolvconf -u' /usr/bin/wg-quick && sed -i '/\[\[ \${#DNS\[@\]} -gt 0 \]\] || return 0/a\        cmd resolvconf -u' /usr/bin/wg-quick
 
       # 如果用户选择使用 wireguard-go reserved 版本，则修改 wg-quick 文件
+      cp -f /usr/bin/wg-quick{,.origin}
       if [ "$KERNEL_ENABLE" = '1' ]; then
-        cp -f /usr/bin/wg-quick{,.origin}
         mv -f /usr/bin/wg-quick /usr/bin/wg-quick.reserved
         grep -q '^#[[:space:]]*add_if' /usr/bin/wg-quick.reserved || sed -i '/add_if$/ {s/^/# /; N; s/\n/&\twireguard-go "$INTERFACE"\n/}' /usr/bin/wg-quick.reserved
         [ "$KERNEL_OR_WIREGUARD_GO" = 'wireguard-go with reserved' ] && ln -sf /usr/bin/wg-quick.reserved /usr/bin/wg-quick || ln -sf /usr/bin/wg-quick.origin /usr/bin/wg-quick
       else
-        grep -q '^#[[:space:]]*add_if' /usr/bin/wg-quick || sed -i '/add_if$/ {s/^/# /; N; s/\n/&\twireguard-go "$INTERFACE"\n/}' /usr/bin/wg-quick
+        grep -q '^#[[:space:]]*add_if' /usr/bin/wg-quick.origin || sed -i '/add_if$/ {s/^/# /; N; s/\n/&\twireguard-go "$INTERFACE"\n/}' /usr/bin/wg-quick.origin
+        ln -sf /usr/bin/wg-quick.origin /usr/bin/wg-quick
       fi
     fi
   fi

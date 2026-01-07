@@ -42,11 +42,11 @@ English | [中文](README.md)
 >
 >2024.9.14 menu.sh v3.1.2 / warp-go.sh v1.2.2 1. Remove the function of generating licenses from the previous version because cloning Warp+ licenses is officially prohibited; 2. Remove unnecessary dependencies on python3;
 >
->2024.7.25 menu.sh v3.1.1 / warp-go.sh v1.2.1 1. Support using the self-built WARP API at https://warp.cloudflare.now.cc/?run=pluskey to generate a 1920 PB WARP+ license for upgrading to a Plus account; 2. Client lacks sufficient support for WARP+, only able to use IPv4 and not IPv6; 3. Optimize the installer to further reduce script runtime;
+>2024.7.25 menu.sh v3.1.1 / warp-go.sh v1.2.1 1. Support using the self-built WARP API at https://warp.cloudflare.nyc.mn/?run=pluskey to generate a 1920 PB WARP+ license for upgrading to a Plus account; 2. Client lacks sufficient support for WARP+, only able to use IPv4 and not IPv6; 3. Optimize the installer to further reduce script runtime;
 >
->2024.7.18 menu.sh v3.1.0 / warp-go.sh v1.2.0 1. Use self-built warp api: https://warp.cloudflare.now.cc/ to upgrade to Teams account, no need to prepare Token in advance, only need to enter organization, email and verification code when the script is running to complete, the efficiency is greatly increased; 2. Because the Client's settings need to be set up in the Cloudflare dashboard, which can cause the vps to lose contact if not handled properly, the Client's is not upgraded to a Teams account, and the user can look up the information to set it up on their own;
+>2024.7.18 menu.sh v3.1.0 / warp-go.sh v1.2.0 1. Use self-built warp api: https://warp.cloudflare.nyc.mn/ to upgrade to Teams account, no need to prepare Token in advance, only need to enter organization, email and verification code when the script is running to complete, the efficiency is greatly increased; 2. Because the Client's settings need to be set up in the Cloudflare dashboard, which can cause the vps to lose contact if not handled properly, the Client's is not upgraded to a Teams account, and the user can look up the information to set it up on their own;
 >
->2024.7.8 menu.sh v3.0.10 / warp-go.sh v1.1.9 1. Publish warp api, you can register account, join Zero Trust, check account information and all other operations. Detailed instructions: https://warp.cloudflare.now.cc/ ; 2. Scripts to update the warp api;
+>2024.7.8 menu.sh v3.0.10 / warp-go.sh v1.1.9 1. Publish warp api, you can register account, join Zero Trust, check account information and all other operations. Detailed instructions: https://warp.cloudflare.nyc.mn/ ; 2. Scripts to update the warp api;
 >
 >2024.6.30 menu.sh v3.0.9 1. By multithreading, parallel processing of optimal MTU, optimal endpoint, downloading wireguard-go and installing dependencies, the script runtime is reduced by more than half; 2. Reverse proxy http://ip-api.com/json and https://hits.seeyoufarm.com with cloudflare worker for better dual-stack support and faster fetching; 3. DNS Priority: Cloudflare 1.1.1.1 > Google 8.8.8.8;
 >
@@ -327,18 +327,18 @@ warp-go [option] [lisence]
 
 | run parameter | Description | Parameters | Example |
 |---|---|---|---|
-|  | User Guide | | `https://warp.cloudflare.now.cc/` |
-| `register` | Register new device | `team_token (optional)`, `format (optional)` | `https://warp.cloudflare.now.cc/?run=register&team_token=<Your-Team-Token>&format=<json\|yaml\|client\|wireguard\|warp-go\|\|clash\|xray\|sing-box\|qrencode>` |
-| `device` | Get detailed information of a specific device | `device_id`, `token` | `https://warp.cloudflare.now.cc/?run=device&device_id=<Your-Device-ID>&token=<Your-Token>` |
-| `app` | Get client configuration | `token` | `https://warp.cloudflare.now.cc/?run=app&token=<Your-Token>` |
-| `bind` | Bind device to account | `device_id`, `token` | `https://warp.cloudflare.now.cc/?run=bind&device_id=<Your-Device-ID>&token=<Your-Token>` |
-| `name` | Set device name | `device_id`, `token`, `device_name` | `https://warp.cloudflare.now.cc/?run=name&device_id=<Your-Device-ID>&token=<Your-Token>&device_name=<Your-Device-Name>` |
-| `license` | Set device license | `device_id`, `token`, `license` | `https://warp.cloudflare.now.cc/?run=license&device_id=<Your-Device-ID>&token=<Your-Token>&license=<Your-License>` |
-| `unbind` | Unbind device from account | `device_id`, `token` | `https://warp.cloudflare.now.cc/?run=unbind&device_id=<Your-Device-ID>&token=<Your-Token>` |
-| `cancel` | Cancel device registration | `device_id`, `token` | `https://warp.cloudflare.now.cc/?run=cancel&device_id=<Your-Device-ID>&token=<Your-Token>` |
-| `id` | Client ID and Reserved conversion | `convert` | `https://warp.cloudflare.now.cc/?run=id&convert=<4-char-string\|Numbers1,Numbers2,Numbers3>` |
-| `token` | Get Zero Trust token | `organization`, `email`, `code` | step1: `https://warp.cloudflare.now.cc/?organization=<Your-Organization>&email=<Your-Email>` </br> step2: `https://warp.cloudflare.now.cc/?organization=<Your-Organization>&A=<A-Value>&S=<S-Value>&N=<N-Value>&code=<Your-Code>` |
-| `key` | Generate a pair of WireGuard public and private keys | `format (optional)` | `https://warp.cloudflare.now.cc/?run=key&format=<json\|yaml>` |
+|  | User Guide | | `https://warp.cloudflare.nyc.mn/` |
+| `register` | Register new device | `team_token (optional)`, `format (optional)` | `https://warp.cloudflare.nyc.mn/?run=register&team_token=<Your-Team-Token>&format=<json\|yaml\|client\|wireguard\|warp-go\|\|clash\|xray\|sing-box\|qrencode>` |
+| `device` | Get detailed information of a specific device | `device_id`, `token` | `https://warp.cloudflare.nyc.mn/?run=device&device_id=<Your-Device-ID>&token=<Your-Token>` |
+| `app` | Get client configuration | `token` | `https://warp.cloudflare.nyc.mn/?run=app&token=<Your-Token>` |
+| `bind` | Bind device to account | `device_id`, `token` | `https://warp.cloudflare.nyc.mn/?run=bind&device_id=<Your-Device-ID>&token=<Your-Token>` |
+| `name` | Set device name | `device_id`, `token`, `device_name` | `https://warp.cloudflare.nyc.mn/?run=name&device_id=<Your-Device-ID>&token=<Your-Token>&device_name=<Your-Device-Name>` |
+| `license` | Set device license | `device_id`, `token`, `license` | `https://warp.cloudflare.nyc.mn/?run=license&device_id=<Your-Device-ID>&token=<Your-Token>&license=<Your-License>` |
+| `unbind` | Unbind device from account | `device_id`, `token` | `https://warp.cloudflare.nyc.mn/?run=unbind&device_id=<Your-Device-ID>&token=<Your-Token>` |
+| `cancel` | Cancel device registration | `device_id`, `token` | `https://warp.cloudflare.nyc.mn/?run=cancel&device_id=<Your-Device-ID>&token=<Your-Token>` |
+| `id` | Client ID and Reserved conversion | `convert` | `https://warp.cloudflare.nyc.mn/?run=id&convert=<4-char-string\|Numbers1,Numbers2,Numbers3>` |
+| `token` | Get Zero Trust token | `organization`, `email`, `code` | step1: `https://warp.cloudflare.nyc.mn/?organization=<Your-Organization>&email=<Your-Email>` </br> step2: `https://warp.cloudflare.nyc.mn/?organization=<Your-Organization>&A=<A-Value>&S=<S-Value>&N=<N-Value>&code=<Your-Code>` |
+| `key` | Generate a pair of WireGuard public and private keys | `format (optional)` | `https://warp.cloudflare.nyc.mn/?run=key&format=<json\|yaml>` |
 
 ### Shell-API Script Usage
 ```
@@ -594,7 +594,7 @@ Quote from Luminous: Actual tests show that WARP+ has no difference from the fre
 
 ## How to Obtain and Use WARP Teams for Linux
 
-* https://warp-token.cloudflare.now.cc/ , through fscarmen's website
+* https://warp-token.cloudflare.nyc.mn/ , through fscarmen's website
 
 * https://web--public--warp-team-api--coia-mfs4.code.run/, through Coia's website
 
@@ -650,8 +650,8 @@ https://github.com/acacia233/Project-WARP-Unlock
 * All enthusiastic netizens
 
 Service providers (in no particular order):
-* fscarmen's Warp API: https://warp.cloudflare.now.cc/
-* fscarmen's Zero Trust Token API: https://warp-token.cloudflare.now.cc/
+* fscarmen's Warp API: https://warp.cloudflare.nyc.mn/
+* fscarmen's Zero Trust Token API: https://warp-token.cloudflare.nyc.mn/
 * CloudFlare Warp(+): https://1.1.1.1/
 * Original author of WGCF project: https://github.com/ViRb3/wgcf/
 * Coia and warp-go team: https://gitlab.com/ProjectWARP/warp-go

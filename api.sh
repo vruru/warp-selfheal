@@ -70,7 +70,7 @@ register_account() {
     PRIVATE_KEY=$(echo $KEY_PAIR | sed 's/.*priv:\(.*\)pub.*/\1/' | xxd -r -p | base64)
     PUBLIC_KEY=$(echo $KEY_PAIR | sed 's/.*pub://' | xxd -r -p | base64)
   else
-    WG_API=$(curl -m5 -sSL https://wg-key.forvps.gq/)
+    WG_API=$(curl -m5 -sSL "https://warp.cloudflare.nyc.mn/?run=key&format=yaml")
     PRIVATE_KEY=$(awk 'NR==2 {print $2}' <<<"$WG_API")
     PUBLIC_KEY=$(awk 'NR==1 {print $2}' <<<"$WG_API")
   fi

@@ -29,8 +29,8 @@ E[7]="Curren operating system is \$SYS.\\\n The system lower than \$SYSTEM \${MA
 C[7]="当前操作是 \$SYS\\\n 不支持 \$SYSTEM \${MAJOR[int]} 以下系统,问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
 E[8]="Install dependence-list:"
 C[8]="安装依赖列表:"
-E[9]="Step 3/3: Best MTU found."
-C[9]="进度 3/3: 已找到最佳 MTU"
+E[9]="Best MTU found."
+C[9]="已找到最佳 MTU"
 E[10]="No suitable solution was found for modifying the warp-go configuration file warp.conf and the script aborted. When you see this message, please send feedback on the bug to:[https://github.com/fscarmen/warp-sh/issues]"
 C[10]="没有找到适合的方案用于修改 warp-go 配置文件 warp.conf，脚本中止。当你看到此信息，请把该 bug 反馈至:[https://github.com/fscarmen/warp-sh/issues]"
 E[11]="Warp-go is not installed yet."
@@ -131,10 +131,10 @@ E[58]="Attempts to register WARP account..."
 C[58]="注册 WARP 账户中……"
 E[59]="Try \${i}"
 C[59]="第\${i}次尝试"
-E[60]="Step 1/3: Install dependencies..."
-C[60]="进度 1/3: 安装系统依赖……"
-E[61]="Step 2/3: Install warp-go..."
-C[61]="进度 2/3: 已安装 warp-go"
+E[60]=""
+C[60]=""
+E[61]="Install warp-go..."
+C[61]="已安装 warp-go"
 E[62]="Congratulations! WARP \$ACCOUNT_TYPE has been turn on. Total time spent:\$(( end - start )) seconds.\\\n Number of script runs in the day: \$TODAY. Total number of runs: \$TOTAL."
 C[62]="恭喜！WARP \$ACCOUNT_TYPE 已开启，总耗时: \$(( end - start ))秒\\\n 脚本当天运行次数: \$TODAY，累计运行次数: \$TOTAL"
 E[63]="Warp-go installation failed. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
@@ -332,30 +332,29 @@ check_arch() {
 check_dependencies() {
   # 对于 Alpine 和 OpenWrt 系统，升级库并重新安装依赖
   if [[ "$SYSTEM" =~ Alpine|OpenWrt ]]; then
-    DEPS_CHECK=("ping" "curl" "wget" "grep" "bash" "ip" "tar" "virt-what" "xxd" "openssl")
-    DEPS_INSTALL=("iputils-ping" "curl" "wget" "grep" "bash" "iproute2" "tar" "virt-what" "xxd" "openssl")
+    DEPS_CHECK=("ping" "curl" "wget" "grep" "bash" "ip" "tar" "virt-what")
+    DEPS_INSTALL=("iputils-ping" "curl" "wget" "grep" "bash" "iproute2" "tar" "virt-what")
   else
     # 对于三大系统需要的依赖
-    [ "${SYSTEM}" = 'CentOS' ] && ${PACKAGE_INSTALL[int]} vim-common
-    DEPS_CHECK=("ping" "wget" "curl" "systemctl" "ip" "xxd" "openssl")
-    DEPS_INSTALL=("iputils-ping" "wget" "curl" "systemctl" "iproute2" "xxd" "openssl")
+    [ "${SYSTEM}" = 'CentOS' ] && DEPS_INSTALL+=("vim-common") && DEPS_CHECK+=("vim")
+    DEPS_CHECK=("ping" "wget" "curl" "systemctl" "ip")
+    DEPS_INSTALL=("iputils-ping" "wget" "curl" "systemctl" "iproute2")
   fi
+
+  # 根据系统添加特定的依赖
+  case "$SYSTEM" in
+    Alpine )
+      DEPS_CHECK+=("openrc")
+      DEPS_INSTALL+=("openrc")
+      ;;
+    Arch )
+      DEPS_CHECK+=("resolvconf")
+      DEPS_INSTALL+=("openresolv")
+  esac
 
   for c in "${!DEPS_CHECK[@]}"; do
     [ ! $(type -p ${DEPS_CHECK[c]}) ] && [[ ! "${DEPS[@]}" =~ "${DEPS_INSTALL[c]}" ]] && DEPS+=(${DEPS_INSTALL[c]})
   done
-
-  # 检查 JSON 格式化工具
-  if [ -x "$(type -p python3)" ]; then
-    JSON_TOOL="python3 -m json.tool"
-  elif [ -x "$(type -p python)" ]; then
-    JSON_TOOL="python -m json.tool"
-  elif [ -x "$(type -p jq)" ]; then
-    JSON_TOOL="jq"
-  else
-    JSON_TOOL="jq"
-    DEPS+=("jq")
-  fi
 
   if [ "${#DEPS[@]}" -ge 1 ]; then
     info "\n $(text 8) ${DEPS[@]} \n"
@@ -402,136 +401,9 @@ warp_api(){
   fi
 
   case "$RUN" in
-    register )
-      # 生成 wireguard 公私钥，并且补上 private key
-      if [[ -x "$(type -p openssl)" && -x "$(type -p xxd)" && -x "$(type -p base64)" ]]; then
-        local KEY_PAIR=$(openssl genpkey -algorithm X25519 | openssl pkey -text -noout)
-        local PRIVATE_KEY=$(echo $KEY_PAIR | sed 's/.*priv:\(.*\)pub.*/\1/; s/ //g' | xxd -r -p | base64)
-        local PUBLIC_KEY=$(echo $KEY_PAIR | sed 's/.*pub://; s/ //g'| xxd -r -p | base64)
-      else
-        local WG_API=$(curl -m5 -sSL "https://warp.cloudflare.now.cc/?run=key&format=yaml")
-        local PRIVATE_KEY=$(awk 'NR==2 {print $2}' <<< "$WG_API")
-        local PUBLIC_KEY=$(awk 'NR==1 {print $2}' <<< "$WG_API")
-      fi
-
-      if grep -q '.' <<< "$PRIVATE_KEY" && grep -q '.' <<< "$PUBLIC_KEY"; then
-        local INSTALL_ID=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 22)
-        local FCM_TOKEN="${INSTALL_ID}:APA91b$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 134)"
-
-        # 由于某些 IP 存在被限制注册，所以使用不停的注册来处理，超过一定次数则使用预设账户
-        until grep -q 'account' <<< "$ACCOUNT"; do
-          ((REGISTER_ERROR_TIME++))
-          if [ "$REGISTER_ERROR_TIME" -gt 30 ]; then
-            break
-          elif [ "$REGISTER_ERROR_TIME" -gt 1 ]; then
-            sleep 5
-          fi
-          local ACCOUNT=$(curl --request POST 'https://api.cloudflareclient.com/v0a2158/reg' \
-            --silent \
-            --location \
-            --tlsv1.3 \
-            --header 'User-Agent: okhttp/3.12.1' \
-            --header 'CF-Client-Version: a-6.10-2158' \
-            --header 'Content-Type: application/json' \
-            --data '{"key":"'${PUBLIC_KEY}'","install_id":"'${INSTALL_ID}'","fcm_token":"'${FCM_TOKEN}'","tos":"'$(date +"%Y-%m-%dT%H:%M:%S.000Z")'","model":"PC","serial_number":"'${INSTALL_ID}'","locale":"zh_CN"}')
-        done
-
-        if grep -q 'account' <<< "$ACCOUNT"; then
-          local CLIENT_ID=$(sed 's/.*"client_id":"\([^\"]\+\)\".*/\1/' <<<"$ACCOUNT")
-          local RESERVED=$(echo "$CLIENT_ID" | base64 -d | xxd -p | fold -w2 | while read HEX; do printf '%d ' "0x${HEX}"; done | awk '{print "["$1", "$2", "$3"]"}')
-
-          $JSON_TOOL <<< "$ACCOUNT" 2>&1 | sed "/\"key\"/a\    \"private_key\": \"$PRIVATE_KEY\"," | sed "/\"client_id\"/a\        \"reserved\": $RESERVED,"
-        else
-          echo '{
-  "id": "b0fe9b24-3396-486e-a12d-c194dbbb7bfb",
-  "type": "a",
-  "model": "PC",
-  "name": "",
-  "key": "rizJSrjeCO51ck8Rmj9YwstFnf6M9rJKZIXFQo3y8j8=",
-  "private_key": "hTk06uwwXhZx3RVqtug3MQ0RSodzdM/U5z/M5NIbh4c=",
-  "account": {
-    "id": "5a43e4b3-2e13-46b9-9437-2abe55cd5f4b",
-    "account_type": "free",
-    "created": "2025-12-02T16:44:10.752518443Z",
-    "updated": "2025-12-02T16:44:10.752518443Z",
-    "premium_data": 0,
-    "quota": 0,
-    "usage": 0,
-    "warp_plus": true,
-    "referral_count": 0,
-    "referral_renewal_countdown": 0,
-    "role": "child",
-    "license": "36L7Pg9E-j6Jp2x04-I40UQ39C",
-    "ttl": "2026-03-02T16:44:10.752514723Z"
-  },
-  "config": {
-    "client_id": "lzaY",
-    "reserved": [
-      151,
-      54,
-      152
-    ],
-    "peers": [
-      {
-        "public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-        "endpoint": {
-          "v4": "162.159.192.5:0",
-          "v6": "[2606:4700:d0::a29f:c005]:0",
-          "host": "engage.cloudflareclient.com:2408",
-          "ports": [
-            2408,
-            500,
-            1701,
-            4500
-          ]
-        }
-      }
-    ],
-    "interface": {
-      "addresses": {
-        "v4": "172.16.0.2",
-        "v6": "2606:4700:110:8921:bf06:c4d7:40b7:8afd"
-      }
-    },
-    "services": {
-      "http_proxy": "172.16.0.1:2480"
-    }
-  },
-  "token": "50d988c2-b5fb-c829-42dd-a33a960ea734",
-  "warp_enabled": false,
-  "waitlist_enabled": false,
-  "created": "2025-12-02T16:44:10.327083841Z",
-  "updated": "2025-12-02T16:44:10.327083841Z",
-  "tos": "2025-12-02T16:44:10.272Z",
-  "place": 0,
-  "locale": "zh-CN",
-  "enabled": true,
-  "install_id": "095iylvdl1trz7ukonr00g",
-  "fcm_token": "095iylvdl1trz7ukonr00g:APA91ba32nwi5zphdi3ercafxodyjr6iwlrrgb919l2gcm4h5irun8y8nsuhbdmc0kufcxhopvonqql4gllld8nsjaavi17hf7yfl5qhdpz03oq4u69ngu0s5hyo6wxiy4luk8xeenf1",
-  "serial_number": "095iylvdl1trz7ukonr00g",
-  "policy": {
-    "always_include": [
-      {
-        "ip": "162.159.197.4"
-      },
-      {
-        "ip": "2606:4700:102::4"
-      }
-    ],
-    "always_exclude": [
-      {
-        "ip": "162.159.197.3"
-      },
-      {
-        "ip": "2606:4700:102::3"
-      }
-    ],
-    "post_quantum": "enabled_with_downgrades",
-    "tunnel_protocol": "masque"
-  }
-}'
-        fi
-      fi
+    register )     
+      local ACCOUNT=$(curl --retry 500 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.nyc.mn/?run=register")
+      grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT"
       ;;
     cancel )
       # 只保留 Teams 或者预设账户，删除其他账户
@@ -1106,8 +978,19 @@ export_file() {
   cat /opt/warp-go/wgcf.conf
   echo -e "\n\n"
 
+  # 检查 JSON 格式化工具
+  if [ -x "$(type -p python3)" ]; then
+    local JSON_TOOL="| python3 -m json.tool"
+  elif [ -x "$(type -p python)" ]; then
+    local JSON_TOOL="| python -m json.tool"
+  elif [ -x "$(type -p json_pp)" ]; then
+    local JSON_TOOL="| json_pp"
+  elif [ -x "$(type -p jq)" ]; then
+    local JSON_TOOL="| jq"
+  fi
+
   info " $(text 54) "
-  cat /opt/warp-go/singbox.json | $JSON_TOOL
+  eval "cat /opt/warp-go/singbox.json $JSON_TOOL"
   echo -e "\n\n"
 }
 
@@ -1228,17 +1111,6 @@ EOF
 
   # 优先使用 IPv4 /IPv6 网络
   { stack_priority; }&
-
-  # 根据系统选择需要安装的依赖, 安装一些必要的网络工具包
-  info "\n $(text 60) \n"
-
-  case "$SYSTEM" in
-    Alpine )
-      ${PACKAGE_INSTALL[int]} openrc
-      ;;
-    Arch )
-      ${PACKAGE_INSTALL[int]} openresolv
-  esac
 
   wait
   info "\n $(text 9) \n"
