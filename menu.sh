@@ -470,7 +470,7 @@ warp_api(){
 
   case "$RUN" in
     register )     
-      local ACCOUNT=$(curl --retry 50 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.nyc.mn/?run=register")
+      local ACCOUNT=$(curl --retry 50 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.now.cc/?run=register")
       grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT" ||
       echo '{
   "id": "b0fe9b24-3396-486e-a12d-c194dbbb7bfb",

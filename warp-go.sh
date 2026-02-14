@@ -402,7 +402,7 @@ warp_api(){
 
   case "$RUN" in
     register )     
-      local ACCOUNT=$(curl --retry 500 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.nyc.mn/?run=register")
+      local ACCOUNT=$(curl --retry 500 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.now.cc/?run=register")
       grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT"
       ;;
     cancel )

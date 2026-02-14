@@ -42,9 +42,9 @@
 >
 >2024.9.14 menu.sh v3.1.2 / warp-go.sh v1.2.2 1. 由于官方禁止了克隆 Warp+ license，故去掉生成 license 的功能; 2. 去掉不必要的依赖 python3
 >
->2024.7.25 menu.sh v3.1.1 / warp-go.sh v1.2.1 1. 支持使用自建 warp api: https://warp.cloudflare.nyc.mn/?run=pluskey，生成 1920 PB WARP+ license 升级为 Plus 账户; 2. Client 对 WARP+ 支持不够，只能使用 IPv4，不能使用 IPv6; 3. 优化安装程序，缩短脚本运行时间
+>2024.7.25 menu.sh v3.1.1 / warp-go.sh v1.2.1 1. 支持使用自建 warp api: https://warp.cloudflare.now.cc/?run=pluskey，生成 1920 PB WARP+ license 升级为 Plus 账户; 2. Client 对 WARP+ 支持不够，只能使用 IPv4，不能使用 IPv6; 3. 优化安装程序，缩短脚本运行时间
 >
->2024.7.18 menu.sh v3.1.0 / warp-go.sh v1.2.0 1. 使用自建 warp api: https://warp.cloudflare.nyc.mn/ ，升级为 Teams 账户，不需要提前获取 Token; 2. 由于 Client 的设置需要到 Cloudflare 控制后台设置，处理不好会导致 vps 失去联系，所以 Client 并没有升级为 Teams 账户的处理
+>2024.7.18 menu.sh v3.1.0 / warp-go.sh v1.2.0 1. 使用自建 warp api: https://warp.cloudflare.now.cc/ ，升级为 Teams 账户，不需要提前获取 Token; 2. 由于 Client 的设置需要到 Cloudflare 控制后台设置，处理不好会导致 vps 失去联系，所以 Client 并没有升级为 Teams 账户的处理
 >
 >2024.7.8 menu.sh v3.0.10 / warp-go.sh v1.1.9 1. 发布 warp api，可以注册账户，加入 Zero Trust，查账户信息等所有的操作; 2. 脚本更新 warp api
 >
@@ -292,18 +292,18 @@ warp-go [option] [lisence]
 
 | run 参数 | 作用描述 | 参数 | 示例 |
 |---|---|---|---|
-|  | 使用指南 | | `https://warp.cloudflare.nyc.mn/` |
-| `register` | 注册新设备 | `team_token（可选）`, `format（可选）` | `https://warp.cloudflare.nyc.mn/?run=register&team_token=<Your-Team-Token>&format=<json\|yaml\|client\|wireguard\|warp-go\|\|clash\|xray\|sing-box\|qrencode>` |
-| `device` | 获取特定设备的详细信息 | `device_id`, `token` | `https://warp.cloudflare.nyc.mn/?run=device&device_id=<Your-Device-ID>&token=<Your-Token>` |
-| `app` | 获取客户端配置 | `token` | `https://warp.cloudflare.nyc.mn/?run=app&token=<Your-Token>` |
-| `bind` | 将设备绑定到帐户 | `device_id`, `token` | `https://warp.cloudflare.nyc.mn/?run=bind&device_id=<Your-Device-ID>&token=<Your-Token>` |
-| `name` | 设置设备名称 | `device_id`, `token`, `device_name` | `https://warp.cloudflare.nyc.mn/?run=name&device_id=<Your-Device-ID>&token=<Your-Token>&device_name=<Your-Device-Name>` |
-| `license` | 设置设备许可证 | `device_id`, `token`, `license` | `https://warp.cloudflare.nyc.mn/?run=license&device_id=<Your-Device-ID>&token=<Your-Token>&license=<Your-License>` |
-| `unbind` | 从帐户中取消绑定设备 | `device_id`, `token` | `https://warp.cloudflare.nyc.mn/?run=unbind&device_id=<Your-Device-ID>&token=<Your-Token>` |
-| `cancel` | 取消设备注册 | `device_id`, `token` | `https://warp.cloudflare.nyc.mn/?run=cancel&device_id=<Your-Device-ID>&token=<Your-Token>` |
-| `id` | Client ID 与 Reserved 转换 | `convert` | `https://warp.cloudflare.nyc.mn/?run=id&convert=<4-char-string\|Numbers1,Numbers2,Numbers3>` |
-| `token` | 获取 Zero Trust token | `organization`, `email`, `code` | step1: `https://warp.cloudflare.nyc.mn/?organization=<Your-Organization>&email=<Your-Email>` </br> step2: `https://warp.cloudflare.nyc.mn/?organization=<Your-Organization>&A=<A-Value>&S=<S-Value>&N=<N-Value>&code=<Your-Code>` |
-| `key` | 生成一对 WireGuard 公私钥 | `format（可选）` | `https://warp.cloudflare.nyc.mn/?run=key&format=<json\|yaml>` |
+|  | 使用指南 | | `https://warp.cloudflare.now.cc/` |
+| `register` | 注册新设备 | `team_token（可选）`, `format（可选）` | `https://warp.cloudflare.now.cc/?run=register&team_token=<Your-Team-Token>&format=<json\|yaml\|client\|wireguard\|warp-go\|\|clash\|xray\|sing-box\|qrencode>` |
+| `device` | 获取特定设备的详细信息 | `device_id`, `token` | `https://warp.cloudflare.now.cc/?run=device&device_id=<Your-Device-ID>&token=<Your-Token>` |
+| `app` | 获取客户端配置 | `token` | `https://warp.cloudflare.now.cc/?run=app&token=<Your-Token>` |
+| `bind` | 将设备绑定到帐户 | `device_id`, `token` | `https://warp.cloudflare.now.cc/?run=bind&device_id=<Your-Device-ID>&token=<Your-Token>` |
+| `name` | 设置设备名称 | `device_id`, `token`, `device_name` | `https://warp.cloudflare.now.cc/?run=name&device_id=<Your-Device-ID>&token=<Your-Token>&device_name=<Your-Device-Name>` |
+| `license` | 设置设备许可证 | `device_id`, `token`, `license` | `https://warp.cloudflare.now.cc/?run=license&device_id=<Your-Device-ID>&token=<Your-Token>&license=<Your-License>` |
+| `unbind` | 从帐户中取消绑定设备 | `device_id`, `token` | `https://warp.cloudflare.now.cc/?run=unbind&device_id=<Your-Device-ID>&token=<Your-Token>` |
+| `cancel` | 取消设备注册 | `device_id`, `token` | `https://warp.cloudflare.now.cc/?run=cancel&device_id=<Your-Device-ID>&token=<Your-Token>` |
+| `id` | Client ID 与 Reserved 转换 | `convert` | `https://warp.cloudflare.now.cc/?run=id&convert=<4-char-string\|Numbers1,Numbers2,Numbers3>` |
+| `token` | 获取 Zero Trust token | `organization`, `email`, `code` | step1: `https://warp.cloudflare.now.cc/?organization=<Your-Organization>&email=<Your-Email>` </br> step2: `https://warp.cloudflare.now.cc/?organization=<Your-Organization>&cf_appsession=<App-Session-Value>&cf_session=<Session-Value>&nonce=<Nonce-Value>&code=<Your-Code>` |
+| `key` | 生成一对 WireGuard 公私钥 | `format（可选）` | `https://warp.cloudflare.now.cc/?run=key&format=<json\|yaml>` |
 
 ### Shell-API 运行脚本
 ```
@@ -619,7 +619,7 @@ https://github.com/acacia233/Project-WARP-Unlock
 * 所有的热心网友们
 
 服务提供（排名不分先后）:
-* fscarmen 的 Warp API: https://warp.cloudflare.nyc.mn/
+* fscarmen 的 Warp API: https://warp.cloudflare.now.cc/
 * fscarmen 的 Zero Trust Token API: https://warp-token.cloudflare.now.cc/
 * CloudFlare Warp(+): https://1.1.1.1/
 * WGCF 项目原作者: https://github.com/ViRb3/wgcf/
