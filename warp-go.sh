@@ -443,7 +443,7 @@ ip4_info() {
   IS_UNINSTALL="$1"
   grep -q 'is_uninstall' <<< "$IS_UNINSTALL" && unset INTERFACE_4
   [ "$L" = 'C' ] && IS_CHINESE=${IS_CHINESE:-'?lang=zh-CN'}
-  local IP_JSON=$(curl --retry 2 -ks4m2 $INTERFACE_4 http://ip.cloudflare.nyc.mn${IS_CHINESE}) &&
+  local IP_JSON=$(curl --retry 2 -ks4m2 $INTERFACE_4 http://ip.cloudflare.now.cc${IS_CHINESE}) &&
   TRACE4=$(awk -F '"' '/"warp"/{print $4}' <<< "$IP_JSON") &&
   WAN4=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP_JSON") &&
   COUNTRY4=$(awk -F '"' '/"country"/{print $4}' <<< "$IP_JSON") &&
@@ -455,7 +455,7 @@ ip6_info() {
   IS_UNINSTALL="$1"
   grep -q 'is_uninstall' <<< "$IS_UNINSTALL" && unset INTERFACE_6
   [ "$L" = 'C' ] && IS_CHINESE=${IS_CHINESE:-'?lang=zh-CN'}
-  local IP_JSON=$(curl --retry 2 -ks6m2 $INTERFACE_6 http://ip.cloudflare.nyc.mn${IS_CHINESE}) &&
+  local IP_JSON=$(curl --retry 2 -ks6m2 $INTERFACE_6 http://ip.cloudflare.now.cc${IS_CHINESE}) &&
   TRACE6=$(awk -F '"' '/"warp"/{print $4}' <<< "$IP_JSON") &&
   WAN6=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP_JSON") &&
   COUNTRY6=$(awk -F '"' '/"country"/{print $4}' <<< "$IP_JSON") &&
@@ -508,7 +508,7 @@ result_priority() {
       PRIO=6
       ;;
     * )
-      [[ "$(curl -ksm8 http://ip.cloudflare.nyc.mn | awk -F '"' '/"ip"/{print $4}')" =~ ^([0-9]{1,3}\.){3} ]] && PRIO=4 || PRIO=6
+      [[ "$(curl -ksm8 http://ip.cloudflare.now.cc | awk -F '"' '/"ip"/{print $4}')" =~ ^([0-9]{1,3}\.){3} ]] && PRIO=4 || PRIO=6
   esac
   PRIORITY_NOW=$(text_eval 21)
 
@@ -1173,7 +1173,7 @@ EOF
   echo "$L" > /opt/warp-go/language
 
   # 结果提示，脚本运行时间，次数统计，IPv4 / IPv6 优先级别
-  [ "$(curl -ksm8 http://ip.cloudflare.nyc.mn | awk -F '"' '/"ip"/{print $4}')" = "$WAN6" ] && PRIO=6 || PRIO=4
+  [ "$(curl -ksm8 http://ip.cloudflare.now.cc | awk -F '"' '/"ip"/{print $4}')" = "$WAN6" ] && PRIO=6 || PRIO=4
   end=$(date +%s)
   ACCOUNT_TYPE=$(grep "Type" /opt/warp-go/warp.conf | cut -d= -f2 | sed "s# ##g")
   result_priority

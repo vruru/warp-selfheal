@@ -591,10 +591,10 @@ ip_info() {
   # 对于查 socks5 代理的 IP，需要用另一个 IP api
   if grep -q 'socks5'  <<< "$INTERFACE_SOCK5"; then
     local WAN=$(curl -s -A a --retry 2 $INTERFACE_SOCK5 https://api-ipv${CHECK_46}.ip.sb/ip) &&
-    local IP_JSON=$(curl -sm2 --retry 2 https://ip.cloudflare.nyc.mn/${WAN}${IS_CHINESE}) &&
+    local IP_JSON=$(curl -sm2 --retry 2 https://ip.cloudflare.now.cc/${WAN}${IS_CHINESE}) &&
     grep -qi '"isp".*Cloudflare' <<< "$IP_JSON" && local IP_TRACE='on'
   else
-    local IP_JSON=$(curl --retry 2 -ksm2 $INTERFACE_SOCK5 -$CHECK_46 https://ip.cloudflare.nyc.mn${IS_CHINESE}) &&
+    local IP_JSON=$(curl --retry 2 -ksm2 $INTERFACE_SOCK5 -$CHECK_46 https://ip.cloudflare.now.cc${IS_CHINESE}) &&
     local IP_TRACE=$(awk -F '"' '/"warp"/{print $4}' <<< "$IP_JSON") &&
     local WAN=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP_JSON")
   fi
