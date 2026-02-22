@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-VERSION='3.2.0'
+VERSION='3.2.1'
 
 # 环境变量用于在Debian或Ubuntu操作系统中设置非交互式（noninteractive）安装模式
 export DEBIAN_FRONTEND=noninteractive
@@ -13,8 +13,8 @@ trap cleanup_resources EXIT INT TERM
 
 E[0]="\n Language:\n 1. English (default) \n 2. 简体中文"
 C[0]="${E[0]}"
-E[1]="1. Account: Remove deprecated WARP+ and Teams account types from installation and upgrade processes (warp a) following Cloudflare's adjustments; 2. Bug Fix: Resolve networking breakdown by correcting routing rule handling during Linux Client removal in proxy mode; 3. Performance: Implement self-hosted IP API to significantly improve IP information retrieval speed; 4. Cleanup: Remove obsolete script prompts and redundant UI messages."
-C[1]="1. 账户管理优化： 顺应 Cloudflare 对 WARP 账户政策的调整，移除了已过时的 WARP+ 和 Teams 账户类型，精简了安装流程及账户升级功能（受影响命令：warp a）; 2. 修复卸载 Bug： 修正了 Linux Client 在 Proxy 模式下，卸载程序后误操作路由规则而导致的网络故障问题; 3. 性能提升： 引入自建 IP API 替代第三方接口，显著提升了 IP 信息获取和脚本初始化的速度; 4. 脚本清理： 移除了部分不再使用的冗余脚本提示语及过时代码块，使输出界面更加简洁"
+E[1]="1. Remove OS version checks to support rolling releases; 2. cloudflare.now.cc -> cloudflare.nyc.mn"
+C[1]="1. 移除系统版本号判断，以支持滚动发行版; 2. cloudflare.now.cc -> cloudflare.nyc.mn"
 E[2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
 C[2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
 E[3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
@@ -63,8 +63,8 @@ E[24]="Client is on"
 C[24]="Client 已开启"
 E[25]="Port change to \$PORT succeeded."
 C[25]="端口成功更换至 \$PORT"
-E[26]="Curren operating system is \$SYS.\\\n The system lower than \$SYSTEM \${MAJOR[int]} is not supported. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[26]="当前操作是 \$SYS\\\n 不支持 \$SYSTEM \${MAJOR[int]} 以下系统,问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[26]="\${MODE_BEFORE} ---\> \${MODE_AFTER}, Confirm press [y] :"
+C[26]="\${MODE_BEFORE} ---\> \${MODE_AFTER}， 确认请按 [y] :"
 E[27]="Local Socks5"
 C[27]="本地 Socks5"
 E[28]="Congratulations! WARP\$TYPE is turned on."
@@ -291,8 +291,6 @@ E[138]="\${WIREGUARD_BEFORE} ---\> \${WIREGUARD_AFTER}. Confirm press [y] :"
 C[138]="\${WIREGUARD_BEFORE} ---\> \${WIREGUARD_AFTER}， 确认请按 [y] :"
 E[139]="Working mode:\n 1. Global (default)\n 2. Non-global"
 C[139]="工作模式:\n 1. 全局 (默认)\n 2. 非全局"
-E[140]="\${MODE_BEFORE} ---\> \${MODE_AFTER}, Confirm press [y] :"
-C[140]="\${MODE_BEFORE} ---\> \${MODE_AFTER}， 确认请按 [y] :"
 
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
@@ -359,27 +357,34 @@ check_virt() {
 # 多方式判断操作系统，试到有值为止。只支持 Debian 10/11、Ubuntu 18.04/20.04 或 CentOS 7/8 ,如非上述操作系统，退出脚本
 check_operating_system() {
   if [ -s /etc/os-release ]; then
-    SYS="$(grep -i pretty_name /etc/os-release | cut -d \" -f2)"
+    SYS="$(awk -F= '/^PRETTY_NAME=/{gsub(/"/,"",$2);print $2;exit}' /etc/os-release)"
   elif [ -x "$(type -p hostnamectl)" ]; then
-    SYS="$(hostnamectl | grep -i system | cut -d : -f2)"
+    SYS="$(awk -F: '/System/{sub(/^[ \t]+/,"",$2);print $2;exit}' < <(hostnamectl))"
   elif [ -x "$(type -p lsb_release)" ]; then
     SYS="$(lsb_release -sd)"
   elif [ -s /etc/lsb-release ]; then
-    SYS="$(grep -i description /etc/lsb-release | cut -d \" -f2)"
+    SYS="$(awk -F= '/^DISTRIB_DESCRIPTION=/{gsub(/"/,"",$2);print $2;exit}' /etc/lsb-release)"
   elif [ -s /etc/redhat-release ]; then
-    SYS="$(grep . /etc/redhat-release)"
+    SYS="$(awk '{print;exit}' /etc/redhat-release)"
   elif [ -s /etc/issue ]; then
-    SYS="$(grep . /etc/issue | cut -d '\' -f1 | sed '/^[ ]*$/d')"
+    SYS="$(awk '{print;exit}' /etc/issue)"
   fi
 
   # 自定义 Alpine 系统若干函数
-  alpine_warp_restart() { wg-quick down warp >/dev/null 2>&1; wg-quick up warp >/dev/null 2>&1; }
-  alpine_warp_enable() { echo -e "/usr/bin/tun.sh\nwg-quick up warp" > /etc/local.d/warp.start; chmod +x /etc/local.d/warp.start; rc-update add local; wg-quick up warp >/dev/null 2>&1; }
+  alpine_warp_restart() {
+    wg-quick down warp >/dev/null 2>&1
+    wg-quick up warp >/dev/null 2>&1
+  }
+
+  alpine_warp_enable() {
+    echo -e "/usr/bin/tun.sh\nwg-quick up warp" > /etc/local.d/warp.start
+    chmod +x /etc/local.d/warp.start
+    rc-update add local
+    wg-quick up warp >/dev/null 2>&1
+  }
 
   REGEX=("debian" "ubuntu" "centos|red hat|kernel|alma|rocky" "alpine" "arch linux|endeavouros" "fedora")
   RELEASE=("Debian" "Ubuntu" "CentOS" "Alpine" "Arch" "Fedora")
-  EXCLUDE=("---")
-  MAJOR=("9" "16" "7" "" "" "37")
   PACKAGE_UPDATE=("apt -y update" "apt -y update" "yum -y update --skip-broken" "apk update -f" "pacman -Sy" "dnf -y update")
   PACKAGE_INSTALL=("apt -y install" "apt -y install" "yum -y install" "apk add -f" "pacman -S --noconfirm" "dnf -y install")
   PACKAGE_UNINSTALL=("apt -y autoremove" "apt -y autoremove" "yum -y autoremove" "apk del -f" "pacman -Rcnsu --noconfirm" "dnf -y autoremove")
@@ -397,11 +402,7 @@ check_operating_system() {
   fi
 
   # 判断主 Linux 版本
-  MAJOR_VERSION=$(sed "s/[^0-9.]//g" <<< "$SYS" | cut -d. -f1)
-
-  # 先排除 EXCLUDE 里包括的特定系统，其他系统需要作大发行版本的比较
-  for ex in "${EXCLUDE[@]}"; do [[ ! "${SYS,,}" =~ $ex ]]; done &&
-  [[ "$MAJOR_VERSION" -lt "${MAJOR[int]}" ]] && error " $(text 26) "
+  MAJOR_VERSION=$(awk '{gsub(/[^0-9.]/,"");print int($0)}' <<< "$SYS")
 }
 
 # 安装系统依赖及定义 ping 指令
@@ -469,8 +470,8 @@ warp_api(){
   fi
 
   case "$RUN" in
-    register )     
-      local ACCOUNT=$(curl --retry 50 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.now.cc/?run=register")
+    register )
+      local ACCOUNT=$(curl --retry 50 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.nyc.mn/?run=register")
       grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT" ||
       echo '{
   "id": "b0fe9b24-3396-486e-a12d-c194dbbb7bfb",
@@ -591,10 +592,10 @@ ip_info() {
   # 对于查 socks5 代理的 IP，需要用另一个 IP api
   if grep -q 'socks5'  <<< "$INTERFACE_SOCK5"; then
     local WAN=$(curl -s -A a --retry 2 $INTERFACE_SOCK5 https://api-ipv${CHECK_46}.ip.sb/ip) &&
-    local IP_JSON=$(curl -sm2 --retry 2 https://ip.cloudflare.now.cc/${WAN}${IS_CHINESE}) &&
+    local IP_JSON=$(curl -sm2 --retry 2 https://ip.cloudflare.nyc.mn/${WAN}${IS_CHINESE}) &&
     grep -qi '"isp".*Cloudflare' <<< "$IP_JSON" && local IP_TRACE='on'
   else
-    local IP_JSON=$(curl --retry 2 -ksm2 $INTERFACE_SOCK5 -$CHECK_46 https://ip.cloudflare.now.cc${IS_CHINESE}) &&
+    local IP_JSON=$(curl --retry 2 -ksm2 $INTERFACE_SOCK5 -$CHECK_46 https://ip.cloudflare.nyc.mn${IS_CHINESE}) &&
     local IP_TRACE=$(awk -F '"' '/"warp"/{print $4}' <<< "$IP_JSON") &&
     local WAN=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP_JSON")
   fi
@@ -1412,7 +1413,7 @@ working_mode_switch() {
     MODE_BEFORE="$(text 96)"; MODE_AFTER="$(text 95)"
   fi
 
-  reading "\n $(text 140) " CONFIRM_MODE_CHANGE
+  reading "\n $(text 26) " CONFIRM_MODE_CHANGE
   if [ "${CONFIRM_MODE_CHANGE,,}" = 'y' ]; then
     wg-quick down warp >/dev/null 2>&1
     [ "$MODE_AFTER" = "$(text 96)" ] && sed -i "/Table/s/#//g;/NonGlobal/s/#//g" /etc/wireguard/warp.conf || sed -i "s/^Table/#Table/g; /NonGlobal/s/^/#&/g" /etc/wireguard/warp.conf

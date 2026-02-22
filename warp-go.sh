@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号和新增功能
-VERSION='1.3.0'
+VERSION='1.3.1'
 
 # 环境变量用于在Debian或Ubuntu操作系统中设置非交互式（noninteractive）安装模式
 export DEBIAN_FRONTEND=noninteractive
@@ -13,8 +13,8 @@ trap cleanup_resources EXIT INT TERM
 
 E[0]="Language:\n  1.English (default) \n  2.简体中文"
 C[0]="${E[0]}"
-E[1]="1. Account: Remove deprecated WARP+ and Teams account types from installation and upgrade processes (warp-go a) following Cloudflare's adjustments; 2. IP-Brushing Logic: Adjust default Netflix unlock preference from IPv4 to IPv6; 3. Performance: Implement self-hosted IP API to significantly improve IP information retrieval speed; 4. Cleanup: Remove obsolete script prompts and redundant UI messages."
-C[2]="1. 账户管理优化： 顺应 Cloudflare 对 WARP 账户政策的调整，移除了已过时的 WARP+ 和 Teams 账户类型，精简了安装流程及账户升级功能（受影响命令：warp-go a）; 2. 刷 IP 逻辑： 将 Netflix 解锁检测的默认首选项从 IPv4 调整为 IPv6; 3. 性能提升： 引入自建 IP API 替代第三方接口，显著提升了 IP 信息获取和脚本初始化的速度; 4. 脚本清理： 移除了部分不再使用的冗余脚本提示语及过时代码块，使输出界面更加简洁"
+E[1]="1. Remove OS version checks to support rolling releases; 2. cloudflare.now.cc -> cloudflare.nyc.mn"
+C[1]="1. 移除系统版本号判断，以支持滚动发行版; 2. cloudflare.now.cc -> cloudflare.nyc.mn"
 E[2]="warp-go h (help)\n warp-go o (temporary warp-go switch)\n warp-go u (uninstall WARP web interface and warp-go)\n warp-go v (sync script to latest version)\n warp-go i (replace IP with Netflix support)\n warp-go 4/6 ( WARP IPv4/IPv6 single-stack)\n warp-go d (WARP dual-stack)\n warp-go n (WARP IPv4 non-global)\n warp-go g (WARP global/non-global switching)\n warp-go e (output wireguard and sing-box configuration file)\n warp-go s 4/6/d (Set stack proiority: IPv4 / IPv6 / VPS default)\n"
 C[2]="warp-go h (帮助）\n warp-go o (临时 warp-go 开关)\n warp-go u (卸载 WARP 网络接口和 warp-go)\n warp-go v (同步脚本至最新版本)\n warp-go i (更换支持 Netflix 的IP)\n warp-go 4/6 (WARP IPv4/IPv6 单栈)\n warp-go d (WARP 双栈)\n warp-go n (WARP IPv4 非全局)\n warp-go g (WARP 全局 / 非全局相互切换)\n warp-go e (输出 wireguard 和 sing-box 配置文件)\n warp-go s 4/6/d (优先级: IPv4 / IPv6 / VPS default)\n"
 E[3]="This project is designed to add WARP network interface for VPS, using warp-go core, using various interfaces of CloudFlare-WARP, integrated wireguard-go, can completely replace WGCF. Save Hong Kong, Toronto and other VPS, can also get WARP IP. Thanks again @CoiaPrant and his team. Project address: https://gitlab.com/ProjectWARP/warp-go/-/tree/master/"
@@ -25,8 +25,8 @@ E[5]="You must run the script as root. You can type sudo -i and then download an
 C[5]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
 E[6]="This script only supports Debian, Ubuntu, CentOS, Arch or Alpine systems, Feedback: [https://github.com/fscarmen/warp-sh/issues]"
 C[6]="本脚本只支持 Debian、Ubuntu、CentOS、Arch 或 Alpine 系统,问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[7]="Curren operating system is \$SYS.\\\n The system lower than \$SYSTEM \${MAJOR[int]} is not supported. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[7]="当前操作是 \$SYS\\\n 不支持 \$SYSTEM \${MAJOR[int]} 以下系统,问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[7]="global"
+C[7]="全局"
 E[8]="Install dependence-list:"
 C[8]="安装依赖列表:"
 E[9]="Best MTU found."
@@ -131,8 +131,8 @@ E[58]="Attempts to register WARP account..."
 C[58]="注册 WARP 账户中……"
 E[59]="Try \${i}"
 C[59]="第\${i}次尝试"
-E[60]=""
-C[60]=""
+E[60]="Non-global"
+C[60]="非全局"
 E[61]="Install warp-go..."
 C[61]="已安装 warp-go"
 E[62]="Congratulations! WARP \$ACCOUNT_TYPE has been turn on. Total time spent:\$(( end - start )) seconds.\\\n Number of script runs in the day: \$TODAY. Total number of runs: \$TOTAL."
@@ -179,10 +179,6 @@ E[82]="Sync the latest version (warp-go v)"
 C[82]="同步最新版本 (warp-go v)"
 E[83]="dualstack"
 C[83]="双栈"
-E[84]="global"
-C[84]="全局"
-E[85]="Non-global"
-C[85]="非全局"
 
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
@@ -247,17 +243,17 @@ check_root_virt() {
 # 多方式判断操作系统，试到有值为止。只支持 Debian 9/10/11、Ubuntu 18.04/20.04/22.04 或 CentOS 7/8 ,如非上述操作系统，退出脚本
 check_operating_system() {
   if [ -s /etc/os-release ]; then
-    SYS="$(grep -i pretty_name /etc/os-release | cut -d \" -f2)"
-  elif [ $(type -p hostnamectl) ]; then
-    SYS="$(hostnamectl | grep -i system | cut -d : -f2)"
-  elif [ $(type -p lsb_release) ]; then
+    SYS="$(awk -F= '/^PRETTY_NAME=/{gsub(/"/,"",$2);print $2;exit}' /etc/os-release)"
+  elif [ -x "$(type -p hostnamectl)" ]; then
+    SYS="$(awk -F: '/System/{sub(/^[ \t]+/,"",$2);print $2;exit}' < <(hostnamectl))"
+  elif [ -x "$(type -p lsb_release)" ]; then
     SYS="$(lsb_release -sd)"
   elif [ -s /etc/lsb-release ]; then
-    SYS="$(grep -i description /etc/lsb-release | cut -d \" -f2)"
+    SYS="$(awk -F= '/^DISTRIB_DESCRIPTION=/{gsub(/"/,"",$2);print $2;exit}' /etc/lsb-release)"
   elif [ -s /etc/redhat-release ]; then
-    SYS="$(grep . /etc/redhat-release)"
+    SYS="$(awk '{print;exit}' /etc/redhat-release)"
   elif [ -s /etc/issue ]; then
-    SYS="$(grep . /etc/issue | cut -d '\' -f1 | sed '/^[ ]*$/d')"
+    SYS="$(awk '{print;exit}' /etc/issue)"
   fi
 
   # 自定义 Alpine 系统若干函数
@@ -265,12 +261,15 @@ check_operating_system() {
     kill -15 $(pgrep warp-go) 2>/dev/null
     /opt/warp-go/warp-go --config=/opt/warp-go/warp.conf 2>&1 &
   }
-  alpine_warp-go_enable() { echo -e "/opt/warp-go/tun.sh\n/opt/warp-go/warp-go --config=/opt/warp-go/warp.conf 2>&1 &" > /etc/local.d/warp-go.start; chmod +x /etc/local.d/warp-go.start; rc-update add local; }
+
+  alpine_warp-go_enable() {
+    echo -e "/opt/warp-go/tun.sh\n/opt/warp-go/warp-go --config=/opt/warp-go/warp.conf 2>&1 &" > /etc/local.d/warp-go.start
+    chmod +x /etc/local.d/warp-go.start
+    rc-update add local
+  }
 
   REGEX=("debian" "ubuntu" "centos|red hat|kernel|alma|rocky|amazon linux" "alpine" "arch linux" "openwrt")
   RELEASE=("Debian" "Ubuntu" "CentOS" "Alpine" "Arch" "OpenWrt")
-  EXCLUDE=("---")
-  MAJOR=("9" "16" "7" "" "" "")
   PACKAGE_UPDATE=("apt -y update" "apt -y update" "yum -y update" "apk update -f" "pacman -Sy" "opkg update")
   PACKAGE_INSTALL=("apt -y install" "apt -y install" "yum -y install" "apk add -f" "pacman -S --noconfirm" "opkg install")
   PACKAGE_UNINSTALL=("apt -y autoremove" "apt -y autoremove" "yum -y autoremove" "apk del -f" "pacman -Rcnsu --noconfirm" "opkg remove --force-depends")
@@ -289,10 +288,6 @@ check_operating_system() {
   fi
 
   [ "$SYSTEM" = OpenWrt ] && [[ ! $(uci show network.wan.proto 2>/dev/null | cut -d \' -f2)$(uci show network.lan.proto 2>/dev/null | cut -d \' -f2) =~ 'static' ]] && error " $(text 77) "
-
-  # 先排除 EXCLUDE 里包括的特定系统，其他系统需要作大发行版本的比较
-  for ex in "${EXCLUDE[@]}"; do [[ ! "${SYS,,}"  =~ $ex ]]; done &&
-  [[ "$(echo "$SYS" | sed "s/[^0-9.]//g" | cut -d. -f1)" -lt "${MAJOR[int]}" ]] && error " $(text_eval 7) "
 }
 
 check_arch() {
@@ -401,8 +396,8 @@ warp_api(){
   fi
 
   case "$RUN" in
-    register )     
-      local ACCOUNT=$(curl --retry 500 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.now.cc/?run=register")
+    register )
+      local ACCOUNT=$(curl --retry 500 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.nyc.mn/?run=register")
       grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT"
       ;;
     cancel )
@@ -443,7 +438,7 @@ ip4_info() {
   IS_UNINSTALL="$1"
   grep -q 'is_uninstall' <<< "$IS_UNINSTALL" && unset INTERFACE_4
   [ "$L" = 'C' ] && IS_CHINESE=${IS_CHINESE:-'?lang=zh-CN'}
-  local IP_JSON=$(curl --retry 2 -ks4m2 $INTERFACE_4 http://ip.cloudflare.now.cc${IS_CHINESE}) &&
+  local IP_JSON=$(curl --retry 2 -ks4m2 $INTERFACE_4 http://ip.cloudflare.nyc.mn${IS_CHINESE}) &&
   TRACE4=$(awk -F '"' '/"warp"/{print $4}' <<< "$IP_JSON") &&
   WAN4=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP_JSON") &&
   COUNTRY4=$(awk -F '"' '/"country"/{print $4}' <<< "$IP_JSON") &&
@@ -455,7 +450,7 @@ ip6_info() {
   IS_UNINSTALL="$1"
   grep -q 'is_uninstall' <<< "$IS_UNINSTALL" && unset INTERFACE_6
   [ "$L" = 'C' ] && IS_CHINESE=${IS_CHINESE:-'?lang=zh-CN'}
-  local IP_JSON=$(curl --retry 2 -ks6m2 $INTERFACE_6 http://ip.cloudflare.now.cc${IS_CHINESE}) &&
+  local IP_JSON=$(curl --retry 2 -ks6m2 $INTERFACE_6 http://ip.cloudflare.nyc.mn${IS_CHINESE}) &&
   TRACE6=$(awk -F '"' '/"warp"/{print $4}' <<< "$IP_JSON") &&
   WAN6=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP_JSON") &&
   COUNTRY6=$(awk -F '"' '/"country"/{print $4}' <<< "$IP_JSON") &&
@@ -508,7 +503,7 @@ result_priority() {
       PRIO=6
       ;;
     * )
-      [[ "$(curl -ksm8 http://ip.cloudflare.now.cc | awk -F '"' '/"ip"/{print $4}')" =~ ^([0-9]{1,3}\.){3} ]] && PRIO=4 || PRIO=6
+      [[ "$(curl -ksm8 http://ip.cloudflare.nyc.mn | awk -F '"' '/"ip"/{print $4}')" =~ ^([0-9]{1,3}\.){3} ]] && PRIO=4 || PRIO=6
   esac
   PRIORITY_NOW=$(text_eval 21)
 
@@ -794,9 +789,9 @@ check_stack() {
   for m in ${!CASE[@]}; do
     [ "$T4@$T6" = "${CASE[m]}" ] && break
   done
-  WARP_BEFORE=("" "" "" "WARP $(text 84) IPv6 only" "WARP $(text 84) IPv6" "WARP $(text 84) IPv4 only" "WARP $(text 84) IPv4" "WARP $(text 84) $(text 83)" "WARP $(text 85) $(text 83)")
-  WARP_AFTER1=("" "" "" "WARP $(text 84) IPv4" "WARP $(text 84) IPv4" "WARP $(text 84) IPv6" "WARP $(text 84) IPv6" "WARP $(text 84) IPv4" "WARP $(text 84) IPv4")
-  WARP_AFTER2=("" "" "" "WARP $(text 84) $(text 83)" "WARP $(text 84) $(text 83)" "WARP $(text 84) $(text 83)" "WARP $(text 84) $(text 83)" "WARP $(text 84) IPv6" "WARP $(text 84) $(text 83)")
+  WARP_BEFORE=("" "" "" "WARP $(text 7) IPv6 only" "WARP $(text 7) IPv6" "WARP $(text 7) IPv4 only" "WARP $(text 7) IPv4" "WARP $(text 7) $(text 83)" "WARP $(text 60) $(text 83)")
+  WARP_AFTER1=("" "" "" "WARP $(text 7) IPv4" "WARP $(text 7) IPv4" "WARP $(text 7) IPv6" "WARP $(text 7) IPv6" "WARP $(text 7) IPv4" "WARP $(text 7) IPv4")
+  WARP_AFTER2=("" "" "" "WARP $(text 7) $(text 83)" "WARP $(text 7) $(text 83)" "WARP $(text 7) $(text 83)" "WARP $(text 7) $(text 83)" "WARP $(text 7) IPv6" "WARP $(text 7) $(text 83)")
   TO1=("" "" "" "014" "014" "106" "106" "114" "014")
   TO2=("" "" "" "01D" "01D" "10D" "10D" "116" "01D")
   SHORTCUT1=("" "" "" "(warp-go 4)" "(warp-go 4)" "(warp-go 6)" "(warp-go 6)" "(warp-go 4)" "(warp-go 4)")
@@ -1173,7 +1168,7 @@ EOF
   echo "$L" > /opt/warp-go/language
 
   # 结果提示，脚本运行时间，次数统计，IPv4 / IPv6 优先级别
-  [ "$(curl -ksm8 http://ip.cloudflare.now.cc | awk -F '"' '/"ip"/{print $4}')" = "$WAN6" ] && PRIO=6 || PRIO=4
+  [ "$(curl -ksm8 http://ip.cloudflare.nyc.mn | awk -F '"' '/"ip"/{print $4}')" = "$WAN6" ] && PRIO=6 || PRIO=4
   end=$(date +%s)
   ACCOUNT_TYPE=$(grep "Type" /opt/warp-go/warp.conf | cut -d= -f2 | sed "s# ##g")
   result_priority

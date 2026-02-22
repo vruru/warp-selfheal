@@ -22,16 +22,18 @@ English | [中文](README.md)
 * * *
 
 ## Update Information
+2026.02.22 mehu.sh v3.2.1 / warp-go.sh v1.3.1 1. Remove OS version checks to support rolling releases; 2. cloudflare.now.cc -> cloudflare.nyc.mn
+
 2026.01.02 mehu.sh v3.2.0 / warp-go.sh v1.3.0 1. Account: Remove deprecated WARP+ and Teams account types from installation and upgrade processes (warp a) following Cloudflare's adjustments; 2. Bug Fix: Resolve networking breakdown by correcting routing rule handling during Linux Client removal in proxy mode; 3. Performance: Implement self-hosted IP API to significantly improve IP information retrieval speed; 4. Cleanup: Remove obsolete script prompts and redundant UI messages; 5. IP-Brushing Logic: Adjust default Netflix unlock preference from IPv4 to IPv6
-
-2025.09.10 menu.sh v3.1.8 Enhance the script's compatibility with Arch Linux and EndeavourOS systems.
-
-2025.08.24 menu.sh v3.1.7 1. Added support for installing Warp on Ubuntu 24.04 and later versions. Thanks to the solution provided by community member [Michaol]; 2. Added support for Client installation on Debian 13. Thanks to the feedback from user [ainp]
 
 <details>
     <summary>Historical Updates (click to expand or collapse)</summary>
 <br>
 
+>2025.09.10 menu.sh v3.1.8 Enhance the script's compatibility with Arch Linux and EndeavourOS systems.
+>
+>2025.08.24 menu.sh v3.1.7 1. Added support for installing Warp on Ubuntu 24.04 and later versions. Thanks to the solution provided by community member [Michaol]; 2. Added support for Client installation on Debian 13. Thanks to the feedback from user [ainp]
+>
 >2025.08.11 menu.sh v3.1.6 / warp-go.sh v1.2.4 Remove best endpoint feature to adapt to official adjustments;
 >
 >2025.03.24 menu.sh v3.1.5 1. Client's Warp mode (network interface) has been fixed to deal with the problem that it does not work after reboot; 2. Fixed the regularity of Team IPv6 judgment;

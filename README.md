@@ -22,16 +22,18 @@
 * * *
 
 ## 更新信息
+2026.02.22 mehu.sh v3.2.1 / warp-go.sh v1.3.1 1. 移除系统版本号判断，以支持滚动发行版; 2. cloudflare.now.cc -> cloudflare.nyc.mn
+
 2026.01.02 mehu.sh v3.2.0 / warp-go.sh v1.3.0 1. 账户管理优化： 顺应 Cloudflare 对 WARP 账户政策的调整，移除了已过时的 WARP+ 和 Teams 账户类型，精简了安装流程及账户升级功能（受影响命令：warp a）; 2. 修复卸载 Bug： 修正了 Linux Client 在 Proxy 模式下，卸载程序后误操作路由规则而导致的网络故障问题; 3. 性能提升： 引入自建 IP API 替代第三方接口，显著提升了 IP 信息获取和脚本初始化的速度; 4. 脚本清理： 移除了部分不再使用的冗余脚本提示语及过时代码块，使输出界面更加简洁; 5. 刷 IP 逻辑： 将 Netflix 解锁检测的默认首选项从 IPv4 调整为 IPv6
 
 2025.09.10 menu.sh v3.1.8 增强脚本对 Arch Linux 及 EndeavourOS 系统的兼容性
-
-2025.08.24 menu.sh v3.1.7 1. 适配 Ubuntu 24.04 及以上版本安装 Warp，感谢网友 [Michaol] 提供的解决方案; 2. 适配 Debian 13 安装 Client，感谢用户 [ainp] 的反馈
 
 <details>
     <summary>历史更新（点击展开或收起）</summary>
 <br>
 
+>2025.08.24 menu.sh v3.1.7 1. 适配 Ubuntu 24.04 及以上版本安装 Warp，感谢网友 [Michaol] 提供的解决方案; 2. 适配 Debian 13 安装 Client，感谢用户 [ainp] 的反馈
+>
 >2025.08.11 menu.sh v3.1.6 / warp-go.sh v1.2.4 删除最优 Endpoint 功能以适应官方调整
 >
 >2025.03.24 menu.sh v3.1.5 1. 处理了 Client 的 Warp 模式(网络接口)重启后不工作的问题; 2. 修正 Team IPv6 判断的正则
