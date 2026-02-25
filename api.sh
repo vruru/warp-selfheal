@@ -18,26 +18,26 @@ fetch_account_information() {
       TOKEN=$(grep 'warp_token' $REGISTER_PATH | sed "s#.*>\(.*\)<.*#\1#")
       CLIENT_ID=$(grep 'client_id' $REGISTER_PATH | sed "s#.*client_id&quot;:&quot;\([^&]\{4\}\)&.*#\1#")
 
-    # 官方 api 文件
+    # 官方 api 文件，默认存放路径为 /etc/wireguard/warp-account.conf
     elif grep -q 'client_id' $REGISTER_PATH; then
-      ID=$(grep -m1 '"id' "$REGISTER_PATH" | cut -d\" -f4)
-      TOKEN=$(grep '"token' "$REGISTER_PATH" | cut -d\" -f4)
-      CLIENT_ID=$(grep 'client_id' "$REGISTER_PATH" | cut -d\" -f4)
+      ID=$(awk -F '"' '/"id"/ {print $4; exit}' "$REGISTER_PATH")
+      TOKEN=$(awk -F '"' '/"token"/ {print $4; exit}' "$REGISTER_PATH")
+      CLIENT_ID=$(awk -F '"' '/client_id/ {print $4; exit}' "$REGISTER_PATH")
 
     # client 文件，默认存放路径为 /var/lib/cloudflare-warp/reg.json
     elif grep -q 'registration_id' $REGISTER_PATH; then
-      ID=$(cut -d\" -f4 "$REGISTER_PATH")
-      TOKEN=$(cut -d\" -f8 "$REGISTER_PATH")
+      ID=$(sed 's/.*registration_id":"\([^"]\+\)".*/\1/' "$REGISTER_PATH")
+      TOKEN=$(sed 's/.*api_token":"\([^"]\+\)".*/\1/' "$REGISTER_PATH")
 
     # wgcf 文件，默认存放路径为 /etc/wireguard/wgcf-account.toml
     elif grep -q 'access_token' $REGISTER_PATH; then
-      ID=$(grep 'device_id' "$REGISTER_PATH" | cut -d\' -f2)
-      TOKEN=$(grep 'access_token' "$REGISTER_PATH" | cut -d\' -f2)
+      ID=$(awk -F"'" '/device_id/ {print $2; exit}' "$REGISTER_PATH")
+      TOKEN=$(awk -F"'" '/access_token/ {print $2; exit}' "$REGISTER_PATH")
 
     # warp-go 文件，默认存放路径为 /opt/warp-go/warp.conf
     elif grep -q 'PrivateKey' $REGISTER_PATH; then
-      ID=$(awk -F' *= *' '/^Device/{print $2}' "$REGISTER_PATH")
-      TOKEN=$(awk -F' *= *' '/^Token/{print $2}' "$REGISTER_PATH")
+      ID=$(awk '/^Device/ {print $NF; exit}' "$REGISTER_PATH")
+      TOKEN=$(awk '/^Token/ {print $NF; exit}' "$REGISTER_PATH")
 
     else
       echo " There is no registered account information, please check the content. " && exit 1
@@ -66,9 +66,9 @@ register_account() {
     PRIVATE_KEY=$(wg genkey)
     PUBLIC_KEY=$(wg pubkey <<<"$PRIVATE_KEY")
   elif [[ -x "$(type -p openssl)" && -x "$(type -p xxd)" && -x "$(type -p base64)" ]]; then
-    KEY_PAIR=$(openssl genpkey -algorithm X25519 -text)
-    PRIVATE_KEY=$(echo $KEY_PAIR | sed 's/.*priv:\(.*\)pub.*/\1/' | xxd -r -p | base64)
-    PUBLIC_KEY=$(echo $KEY_PAIR | sed 's/.*pub://' | xxd -r -p | base64)
+    KEY_PAIR=$(openssl genpkey -algorithm X25519 | openssl pkey -text -noout)
+    PRIVATE_KEY=$(echo $KEY_PAIR | sed 's/.*priv:\(.*\)pub.*/\1/; s/ //g' | xxd -r -p | base64)
+    PUBLIC_KEY=$(echo $KEY_PAIR | sed 's/.*pub://; s/ //g'| xxd -r -p | base64)
   else
     WG_API=$(curl -m5 -sSL "https://warp.cloudflare.now.cc/?run=key&format=yaml")
     PRIVATE_KEY=$(awk 'NR==2 {print $2}' <<<"$WG_API")
@@ -275,10 +275,10 @@ while [[ $# -ge 1 ]]; do
     shift
     ;;
   -t | --token)
-      shift
-      TEAM_TOKEN="$1"
-      shift
-      ;;
+    shift
+    TEAM_TOKEN="$1"
+    shift
+    ;;
   -h | --help)
     help
     exit

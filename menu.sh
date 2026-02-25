@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-VERSION='3.2.1'
+VERSION='3.2.2'
 
 # 环境变量用于在Debian或Ubuntu操作系统中设置非交互式（noninteractive）安装模式
 export DEBIAN_FRONTEND=noninteractive
@@ -13,8 +13,8 @@ trap cleanup_resources EXIT INT TERM
 
 E[0]="\n Language:\n 1. English (default) \n 2. 简体中文"
 C[0]="${E[0]}"
-E[1]="1. Remove OS version checks to support rolling releases; 2. cloudflare.now.cc -> cloudflare.nyc.mn"
-C[1]="1. 移除系统版本号判断，以支持滚动发行版; 2. cloudflare.now.cc -> cloudflare.nyc.mn"
+E[1]="Restore Reserved configuration for Warp usage"
+C[1]="由于部分地区使用 Warp，仍需保留 Reserved 配置，因此恢复之前的配置文件"
 E[2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
 C[2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
 E[3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
@@ -440,32 +440,16 @@ warp_api(){
   local FILE_PATH=$2
 
   if [ -s "$FILE_PATH" ]; then
-    # Teams 账户文件
-    if grep -q 'xml version' $FILE_PATH; then
-      local WARP_DEVICE_ID=$(grep 'correlation_id' $FILE_PATH | sed "s#.*>\(.*\)<.*#\1#")
-      local WARP_TOKEN=$(grep 'warp_token' $FILE_PATH | sed "s#.*>\(.*\)<.*#\1#")
-      local WARP_CLIENT_ID=$(grep 'client_id' $FILE_PATH | sed "s#.*client_id&quot;:&quot;\([^&]\{4\}\)&.*#\1#")
-
-    # 官方 api 文件
-    elif grep -q 'client_id' $FILE_PATH; then
-      local WARP_DEVICE_ID=$(grep -m1 '"id' "$FILE_PATH" | cut -d\" -f4)
-      local WARP_TOKEN=$(grep '"token' "$FILE_PATH" | cut -d\" -f4)
-      local WARP_CLIENT_ID=$(grep 'client_id' "$FILE_PATH" | cut -d\" -f4)
+    # 官方 api 文件，默认存放路径为 /etc/wireguard/warp-account.conf
+    if grep -q 'client_id' $FILE_PATH; then
+      local WARP_DEVICE_ID=$(awk -F '"' '/"id"/ {print $4; exit}' "$FILE_PATH")
+      local WARP_TOKEN=$(awk -F '"' '/"token"/ {print $4; exit}' "$FILE_PATH")
+      local WARP_CLIENT_ID=$(awk -F '"' '/client_id/ {print $4; exit}' "$FILE_PATH")
 
     # client 文件，默认存放路径为 /var/lib/cloudflare-warp/reg.json
     elif grep -q 'registration_id' $FILE_PATH; then
-      local WARP_DEVICE_ID=$(cut -d\" -f4 "$FILE_PATH")
-      local WARP_TOKEN=$(cut -d\" -f8 "$FILE_PATH")
-
-    # wgcf 文件，默认存放路径为 /etc/wireguard/wgcf-account.toml
-    elif grep -q 'access_token' $FILE_PATH; then
-      local WARP_DEVICE_ID=$(grep 'device_id' "$FILE_PATH" | cut -d\' -f2)
-      local WARP_TOKEN=$(grep 'access_token' "$FILE_PATH" | cut -d\' -f2)
-
-    # warp-go 文件，默认存放路径为 /opt/warp-go/warp.conf
-    elif grep -q 'PrivateKey' $FILE_PATH; then
-      local WARP_DEVICE_ID=$(awk -F' *= *' '/^Device/{print $2}' "$FILE_PATH")
-      local WARP_TOKEN=$(awk -F' *= *' '/^Token/{print $2}' "$FILE_PATH")
+      local WARP_DEVICE_ID=$(sed 's/.*registration_id":"\([^"]\+\)".*/\1/' "$FILE_PATH")
+      local WARP_TOKEN=$(sed 's/.*api_token":"\([^"]\+\)".*/\1/' "$FILE_PATH")
     fi
   fi
 
@@ -866,6 +850,12 @@ change_ip() {
     warp_restart() {
       warning " $(text 55) "
       wg | grep -q '^interface:' && wg-quick down warp >/dev/null 2>&1
+      warp_api "cancel" "/etc/wireguard/warp-account.conf" >/dev/null 2>&1
+      warp_api "register" > /etc/wireguard/warp-account.conf 2>/dev/null
+      local PRIVATEKEY="$(grep 'private_key' /etc/wireguard/warp-account.conf | cut -d\" -f4)"
+      local ADDRESS6="$(grep '"v6.*"$' /etc/wireguard/warp-account.conf | cut -d\" -f4)"
+      local CLIENT_ID="$(awk '/"reserved": \[/{flag=1; printf "["; next} flag && /\]/{printf "]"; flag=0; print ""; next} flag {gsub(/[ \t\n\r]/,""); printf "%s", $0}' /etc/wireguard/warp-account.conf)"
+      [ -s /etc/wireguard/warp.conf ] && sed -i "s#\(PrivateKey[ ]\+=[ ]\+\).*#\1$PRIVATEKEY#g; s#\(Address[ ]\+=[ ]\+\).*\(/128$\)#\1$ADDRESS6\2#g; s#\(.*Reserved[ ]\+=[ ]\+\).*#\1$CLIENT_ID#g" /etc/wireguard/warp.conf
       ss -nltp | grep dnsmasq >/dev/null 2>&1 && systemctl restart dnsmasq >/dev/null 2>&1
       wg-quick up warp >/dev/null 2>&1
       sleep $j
@@ -1855,11 +1845,12 @@ install() {
     if [ -s /etc/wireguard/warp-account.conf ]; then
       cat > /etc/wireguard/warp.conf <<EOF
 [Interface]
-PrivateKey = $(grep 'private_key' /etc/wireguard/warp-account.conf | cut -d\" -f4)
+PrivateKey = $(awk -F'"' '/"private_key"/ {print $4; exit}' /etc/wireguard/warp-account.conf)
 Address = 172.16.0.2/32
-Address = $(grep '"v6.*"$' /etc/wireguard/warp-account.conf | cut -d\" -f4)/128
+Address = $(awk -F'"' '/"v6"[[:space:]]*:/ && $4 !~ /^\[/ {print $4; exit}' /etc/wireguard/warp-account.conf)/128
 DNS = 8.8.8.8
 MTU = 1280
+#Reserved = $(awk '/"reserved": \[/{flag=1; printf "["; next} flag && /\]/{printf "]"; flag=0; print ""; next} flag {gsub(/[ \t\n\r]/,""); printf "%s", $0}' /etc/wireguard/warp-account.conf)
 #Table = off
 #PostUp = /etc/wireguard/NonGlobalUp.sh
 #PostDown = /etc/wireguard/NonGlobalDown.sh
