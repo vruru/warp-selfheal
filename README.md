@@ -22,6 +22,8 @@
 * * *
 
 ## 更新信息
+2026.03.01 warp-go.sh v1.3.2 为 IPv4 / IPv6 only 主机使用固定 IP 端点
+
 2026.02.25 menu.sh v3.2.2 Restore Reserved configuration for Warp usage; 由于部分地区使用 Warp，仍需保留 Reserved 配置，因此恢复之前的配置文件
 
 2026.02.22 menu.sh v3.2.1 / warp-go.sh v1.3.1 1. 移除系统版本号判断，以支持滚动发行版; 2. cloudflare.now.cc -> cloudflare.nyc.mn

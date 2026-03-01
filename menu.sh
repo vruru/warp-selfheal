@@ -1112,7 +1112,7 @@ uninstall() {
   # 删除本脚本安装在 /etc/wireguard/ 下的所有文件，如果删除后目录为空，一并把目录删除
   if [ -s /usr/bin/wg-quick.origin ]; then
     # 检查是否需要还原wg-quick.origin文件
-    grep -q '^#[[:space:]]\+add_if$' /usr/bin/wg-quick.origin && sed 's/#\([[:space:]]\+add_if\)/\1/; /wireguard-go "$INTERFACE"/d' /usr/bin/wg-quick
+    grep -q '^#[[:space:]]\+add_if$' /usr/bin/wg-quick.origin && sed -i 's/#\([[:space:]]\+add_if\)/\1/; /wireguard-go "$INTERFACE"/d' /usr/bin/wg-quick.origin
     mv -f /usr/bin/wg-quick.origin /usr/bin/wg-quick
   fi
   rm -f /usr/bin/wg-quick.{origin,reserved}
