@@ -1907,11 +1907,10 @@ EOF
       if [ "$DEBIAN_VERSION" = '9' ]; then
         echo "deb http://deb.debian.org/debian/ unstable main" > /etc/apt/sources.list.d/unstable-wireguard.list
         echo -e "Package: *\nPin: release a=unstable\nPin-Priority: 150\n" > /etc/apt/preferences.d/limit-unstable
-      elif
-        [ "$DEBIAN_VERSION" = '10' ]; then
-        echo 'deb http://archive.debian.org/debian buster-backports main' > /etc/apt/sources.list.d/backports.list
+      elif [[ "$DEBIAN_VERSION" =~ ^(10|11)$ ]]; then
+        echo "deb http://archive.debian.org/debian $(awk -F '=' '/VERSION_CODENAME/{print $2}' /etc/os-release)-backports main" > /etc/apt/sources.list.d/backports.list
       else
-        echo "deb http://deb.debian.org/debian $(awk -F '=' '/VERSION_CODENAME/{print $2}' /etc/os-release | sed 's/trixie/bookworm/')-backports main" > /etc/apt/sources.list.d/backports.list
+        echo "deb http://deb.debian.org/debian $(awk -F '=' '/VERSION_CODENAME/{print $2}' /etc/os-release)-backports main" > /etc/apt/sources.list.d/backports.list
       fi
       # 获取最新的软件包列表和更新已安装软件包的信息
       ${PACKAGE_UPDATE[int]}
