@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-VERSION='3.2.2'
+VERSION='3.2.3'
 
 # 环境变量用于在Debian或Ubuntu操作系统中设置非交互式（noninteractive）安装模式
 export DEBIAN_FRONTEND=noninteractive
 
 # Github 反代加速代理
-GITHUB_PROXY=('' 'https://v6.gh-proxy.org/' 'https://gh-proxy.com/' 'https://hub.glowp.xyz/' 'https://proxy.vvvv.ee/' 'https://ghproxy.lvedong.eu.org/')
+GITHUB_PROXY=('https://v6.gh-proxy.org/' 'https://gh-proxy.com/' 'https://hub.glowp.xyz/' 'https://proxy.vvvv.ee/' 'https://ghproxy.lvedong.eu.org/')
 
-trap cleanup_resources EXIT INT TERM
+trap cleanup_temp EXIT
+trap on_interrupt_exit INT QUIT TERM
 
 E[0]="\n Language:\n 1. English (default) \n 2. 简体中文"
 C[0]="${E[0]}"
-E[1]="Restore Reserved configuration for Warp usage"
-C[1]="由于部分地区使用 Warp，仍需保留 Reserved 配置，因此恢复之前的配置文件"
+E[1]="1. Menu adjustment: Removed the change License (warp a) function; 2. Optimize functions to improve execution efficiency"
+C[1]="1. 菜单调整：已移除更换 License (warp a) 功能; 2. 优化函数，提升执行效率"
 E[2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
 C[2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
 E[3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
@@ -167,8 +168,8 @@ E[76]="Exit"
 C[76]="退出脚本"
 E[77]="Turn off WARP (warp o)"
 C[77]="暂时关闭 WARP (warp o)"
-E[78]="Change the WARP account type (warp a)"
-C[78]="变更 WARP 账户 (warp a)"
+E[78]=""
+C[78]=""
 E[79]="Do you uninstall the following dependencies \(if any\)? Please note that this will potentially prevent other programs that are using the dependency from working properly.\\\n\\\n \$UNINSTALL_DEPENDENCIES_LIST"
 C[79]="是否卸载以下依赖\(如有\)？请注意，这将有可能使其他正在使用该依赖的程序不能正常工作\\\n\\\n \$UNINSTALL_DEPENDENCIES_LIST"
 E[80]="Professional one-click script for WARP to unblock streaming media (Supports multi-platform, multi-mode and TG push)"
@@ -298,20 +299,92 @@ error() { echo -e "\033[31m\033[01m$*\033[0m" && exit 1; }  # 红色
 info() { echo -e "\033[32m\033[01m$*\033[0m"; }   # 绿色
 hint() { echo -e "\033[33m\033[01m$*\033[0m"; }   # 黄色
 reading() { read -rp "$(info "$1")" "$2"; }
-text() { grep -q '\$' <<< "${E[$*]}" && eval echo "\$(eval echo "\${${L}[$*]}")" || eval echo "\${${L}[$*]}"; }
 
-# 清理函数
-cleanup_resources() {
-  rm -f /tmp/{ip,wireguard-go-*,best_mtu,statistics} 2>/dev/null; exit 0
+# 清理临时文件
+cleanup_temp() {
+  rm -f /tmp/{ip,wireguard-go-*,best_mtu,statistics,cdn_proxy} 2>/dev/null
 }
 
-# 检测是否需要启用 Github CDN，如能直接连通，则不使用
+# 中断信号处理
+on_interrupt_exit() {
+  cleanup_temp
+  echo -e '\n'
+  exit 1
+}
+
+# 预处理：扫描 E/C 数组，把含 $ 的条目下标记录到关联数组，避免 text() 每次调用都启动 grep 子进程
+declare -A TEXT_NEEDS_EVAL
+for _text_i in "${!E[@]}"; do
+  [[ "${E[${_text_i}]}" == *'$'* || "${C[${_text_i}]}" == *'$'* ]] && TEXT_NEEDS_EVAL[${_text_i}]=1
+done
+unset _text_i
+
+# text <index>：输出当前语言对应的字符串，含 $ 变量的条目用 eval 展开，其余直接 printf
+text() {
+  local -n _text_arr="${L}"        # nameref 指向 E 或 C，零子进程
+  local _text_val="${_text_arr[$*]}"
+  if [[ -n "${TEXT_NEEDS_EVAL[$*]}" ]]; then
+    eval "printf '%s' \"${_text_val}\""
+  else
+    printf '%s' "${_text_val}"
+  fi
+}
+
+# 检测是否需要启用 Github CDN，如能直接连通 api.github.com，则不使用
 check_cdn() {
-  # GITHUB_PROXY 数组第一个元素为空，相当于直连
-  for PROXY_URL in "${GITHUB_PROXY[@]}"; do
-    local PROXY_STATUS_CODE=$(wget --server-response --spider --quiet --timeout=3 --tries=1 ${PROXY_URL}https://raw.githubusercontent.com/fscarmen/warp-sh/main/README.md 2>&1 | awk '/HTTP\//{last_field = $2} END {print last_field}')
-    [ "$PROXY_STATUS_CODE" = "200" ] && GH_PROXY="$PROXY_URL" && break
+  local PROXY CODE PID CMD
+  local _WAIT_COUNT=120
+  local PIDS=()
+  local API_URL='https://api.github.com/repos/fscarmen/warp-sh/releases'
+
+  # 确定下载工具：优先 wget，次选 curl
+  if command -v wget >/dev/null 2>&1; then
+    CMD='wget'
+  elif command -v curl >/dev/null 2>&1; then
+    CMD='curl'
+  else
+    GH_PROXY=''
+    return
+  fi
+
+  # 获取 HTTP 状态码
+  get_code() {
+    local url=$1
+    if [ "$CMD" = 'wget' ]; then
+      wget -qT5 -O /dev/null --server-response "$url" 2>&1 | awk '/HTTP\//{code=$2} END{print code}'
+    else
+      curl -skL -w "%{http_code}" "$url" -o /dev/null
+    fi
+  }
+
+  # 直连检测
+  CODE=$(get_code "$API_URL")
+  if [ "$CODE" = '200' ]; then
+    GH_PROXY=''
+    return
+  fi
+
+  # 并发探测代理
+  for PROXY in "${GITHUB_PROXY[@]}"; do
+    {
+      CODE=$(get_code "${PROXY}${API_URL}")
+      [ "$CODE" = '200' ] && [ ! -e "/tmp/cdn_proxy" ] && printf '%s' "$PROXY" > "/tmp/cdn_proxy"
+    } &
+    PIDS+=("$!")
   done
+
+  # 等第一个返回 200 的代理，超时则回退为直连，避免无限等待卡死
+  while [ ! -e "/tmp/cdn_proxy" ] && [ "$_WAIT_COUNT" -gt 0 ]; do
+    sleep 0.05
+    (( _WAIT_COUNT-- )) || true
+  done
+
+  [ -e "/tmp/cdn_proxy" ] && GH_PROXY=$(cat "/tmp/cdn_proxy") || GH_PROXY=''
+
+  # 清理后台任务和临时文件
+  for PID in "${PIDS[@]}"; do kill "$PID" >/dev/null 2>&1 || true; done
+  for PID in "${PIDS[@]}"; do wait "$PID" 2>/dev/null || true; done
+  rm -f "/tmp/cdn_proxy"
 }
 
 # 脚本当天及累计运行次数统计
@@ -2368,12 +2441,10 @@ menu_setting() {
     [ "$CLIENT" -lt 3 ] && MENU_OPTION[1]="1.  $(text 88)" || MENU_OPTION[1]="1.  $(text 89)"
     [ "$WIREPROXY" -lt 2 ] && MENU_OPTION[2]="2.  $(text 127)" || MENU_OPTION[2]="2.  $(text 128)"
     MENU_OPTION[3]="3.  $(text 63)"
-    MENU_OPTION[4]="4.  $(text 78)"
 
     ACTION[1]() { client_onoff; }
     ACTION[2]() { wireproxy_onoff; }
     ACTION[3]() { change_port; }
-    ACTION[4]() { update; }
 
   else
     check_stack
@@ -2389,10 +2460,35 @@ menu_setting() {
       * )
         MENU_OPTION[1]="1.  $(text 105)"
         MENU_OPTION[2]="2.  $(text 106)"
-        MENU_OPTION[3]="3.  $(text 78)"
         ACTION[1]() { stack_switch; }
         ACTION[2]() { stack_switch; }
-        ACTION[3]() { update; }
+        
+        # case * 分支只有2个菜单项，后续从第3项开始
+        [ -e /etc/dnsmasq.d/warp.conf ] && IPTABLE_INSTALLED="$(text 92)"
+        wg show warp >/dev/null 2>&1 && MENU_OPTION[3]="3.  $(text 77)" || MENU_OPTION[3]="3.  $(text 71)"
+        if [ -e /etc/wireguard/warp.conf ]; then
+          grep -q '#Table' /etc/wireguard/warp.conf && GLOBAL_OR_NOT="$(text 95)" || GLOBAL_OR_NOT="$(text 96)"
+        fi
+
+        MENU_OPTION[4]="4.  ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 82)"
+        MENU_OPTION[5]="5.  $(text 35)"
+        MENU_OPTION[6]="6.  $(text 72)"
+        MENU_OPTION[7]="7.  $(text 73)"
+        MENU_OPTION[8]="8.  $(text 75)"
+        MENU_OPTION[9]="9.  $(text 80)"
+        MENU_OPTION[10]="10. ${IPTABLE_INSTALLED}$(text 57)"
+        MENU_OPTION[11]="11. ${WIREPROXY_INSTALLED}$(text 113)"
+        MENU_OPTION[12]="12. ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
+        MENU_OPTION[0]="0.  $(text 76)"
+
+        ACTION[3]() { OPTION=o; onoff; }
+        ACTION[4]() { client_install; }; ACTION[5]() { change_ip; }; ACTION[6]() { uninstall; }; ACTION[7]() { bbrInstall; }; ACTION[8]() { ver; };
+        ACTION[9]() { bash <(curl -sSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh) -$L; };
+        ACTION[10]() { IS_ANEMONE=is_anemone ;install; };
+        ACTION[11]() { IS_PUFFERFFISH=is_pufferffish; install; };
+        ACTION[12]() { IS_LUBAN=is_luban; client_install; };
+        ACTION[0]() { exit; }
+        return
     esac
   fi
 
@@ -2405,21 +2501,20 @@ menu_setting() {
   MENU_OPTION[5]="5.  ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 82)"
   MENU_OPTION[6]="6.  $(text 35)"
   MENU_OPTION[7]="7.  $(text 72)"
-  MENU_OPTION[8]="8.  $(text 78)"
-  MENU_OPTION[9]="9.  $(text 73)"
-  MENU_OPTION[10]="10. $(text 75)"
-  MENU_OPTION[11]="11. $(text 80)"
-  MENU_OPTION[12]="12. ${IPTABLE_INSTALLED}$(text 57)"
-  MENU_OPTION[13]="13. ${WIREPROXY_INSTALLED}$(text 113)"
-  MENU_OPTION[14]="14. ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
+  MENU_OPTION[8]="8.  $(text 73)"
+  MENU_OPTION[9]="9.  $(text 75)"
+  MENU_OPTION[10]="10. $(text 80)"
+  MENU_OPTION[11]="11. ${IPTABLE_INSTALLED}$(text 57)"
+  MENU_OPTION[12]="12. ${WIREPROXY_INSTALLED}$(text 113)"
+  MENU_OPTION[13]="13. ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
   MENU_OPTION[0]="0.  $(text 76)"
 
   ACTION[4]() { OPTION=o; onoff; }
-  ACTION[5]() { client_install; }; ACTION[6]() { change_ip; }; ACTION[7]() { uninstall; }; ACTION[8]() { update; }; ACTION[9]() { bbrInstall; }; ACTION[10]() { ver; };
-  ACTION[11]() { bash <(curl -sSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh) -$L; };
-  ACTION[12]() { IS_ANEMONE=is_anemone ;install; };
-  ACTION[13]() { IS_PUFFERFFISH=is_pufferffish; install; };
-  ACTION[14]() { IS_LUBAN=is_luban; client_install; };
+  ACTION[5]() { client_install; }; ACTION[6]() { change_ip; }; ACTION[7]() { uninstall; }; ACTION[8]() { bbrInstall; }; ACTION[9]() { ver; };
+  ACTION[10]() { bash <(curl -sSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh) -$L; };
+  ACTION[11]() { IS_ANEMONE=is_anemone ;install; };
+  ACTION[12]() { IS_PUFFERFFISH=is_pufferffish; install; };
+  ACTION[13]() { IS_LUBAN=is_luban; client_install; };
   ACTION[0]() { exit; }
   }
 
