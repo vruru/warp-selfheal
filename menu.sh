@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-VERSION='3.2.3'
+VERSION='3.2.4'
 
 # 环境变量用于在Debian或Ubuntu操作系统中设置非交互式（noninteractive）安装模式
 export DEBIAN_FRONTEND=noninteractive
@@ -14,8 +14,8 @@ trap on_interrupt_exit INT QUIT TERM
 
 E[0]="\n Language:\n 1. English (default) \n 2. 简体中文"
 C[0]="${E[0]}"
-E[1]="1. Menu adjustment: Removed the change License (warp a) function; 2. Optimize functions to improve execution efficiency"
-C[1]="1. 菜单调整：已移除更换 License (warp a) 功能; 2. 优化函数，提升执行效率"
+E[1]="1. Fix wireproxy WARP network detection for dual-stack environments; 2. Set wireproxy DNS resolve strategy to auto"
+C[1]="1. 修复 wireproxy 获取双栈 WARP 网络的问题; 2. 将 wireproxy DNS 解析策略设置为 auto"
 E[2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
 C[2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
 E[3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
@@ -2103,9 +2103,9 @@ EOF
 # of a wg-quick configuration. To understand what these fields mean, please refer to:
 # https://wiki.archlinux.org/title/WireGuard#Persistent_configuration
 # https://www.wireguard.com/#simple-network-interface
+# The subnet should be /32 and /128 for IPv4 and v6 respectively
 [Interface]
-Address = 172.16.0.2/32 # The subnet should be /32 and /128 for IPv4 and v6 respectively
-Address = $FREE_ADDRESS6
+Address = 172.16.0.2/32, $FREE_ADDRESS6
 MTU = $MTU
 PrivateKey = $FREE_PRIVATEKEY
 DNS = $DNS
@@ -2132,6 +2132,16 @@ Endpoint = $ENDPOINT
 #ListenPort = 3422
 #Target = localhost:25545
 
+# STDIOTunnel is a tunnel connecting the standard input and output of the wireproxy
+# process to the specified TCP target via wireguard.
+# This is especially useful to use wireproxy as a ProxyCommand parameter in openssh
+# For example:
+#    ssh -o ProxyCommand='wireproxy -c myconfig.conf' ssh.myserver.net
+# Flow:
+# Piped command -->(wireguard)--> ssh.myserver.net:22
+#[STDIOTunnel]
+#Target = ssh.myserver.net:22
+
 # Socks5 creates a socks5 proxy on your LAN, and all traffic would be routed via wireguard.
 [Socks5]
 BindAddress = 127.0.0.1:$PORT
@@ -2141,6 +2151,27 @@ BindAddress = 127.0.0.1:$PORT
 #Username = ...
 # Avoid using spaces in the password field
 #Password = ...
+
+# http creates a http proxy on your LAN, and all traffic would be routed via wireguard.
+#[http]
+#BindAddress = 127.0.0.1:25345
+
+# HTTP authentication parameters, specifying username and password enables
+# proxy authentication.
+#Username = ...
+# Avoid using spaces in the password field
+#Password = ...
+
+# Specifying certificate and key enables HTTPS
+#CertFile = ...
+#KeyFile = ...
+
+[Resolve]
+# Set DNS Resovle Strategy
+# `ipv4`: Prioritize A records.
+# `ipv6`: Prioritize AAAA records       .
+# `auto` (Default): If the WireGuard interface has IPv4 address only, it's equivalent to `ipv4`, otherwise it's equivalent to `ipv6`.
+ResolveStrategy = auto
 EOF
 
     # 创建 WireProxy systemd 进程守护
@@ -2462,7 +2493,7 @@ menu_setting() {
         MENU_OPTION[2]="2.  $(text 106)"
         ACTION[1]() { stack_switch; }
         ACTION[2]() { stack_switch; }
-        
+
         # case * 分支只有2个菜单项，后续从第3项开始
         [ -e /etc/dnsmasq.d/warp.conf ] && IPTABLE_INSTALLED="$(text 92)"
         wg show warp >/dev/null 2>&1 && MENU_OPTION[3]="3.  $(text 77)" || MENU_OPTION[3]="3.  $(text 71)"

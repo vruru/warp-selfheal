@@ -22,6 +22,8 @@ English | [中文](README.md)
 * * *
 
 ## Update Information
+2026.04.28 menu.sh v3.2.4 1. Fix wireproxy WARP network detection for dual-stack environments; 2. Set wireproxy DNS resolve strategy to auto
+
 2026.04.10 menu.sh v3.2.3 1. Menu adjustment: Removed the change License (warp a) function; 2. Optimize functions to improve execution efficiency
 
 2026.03.01 warp-go.sh v1.3.2 Use fixed IP endpoints on IPv4-only / IPv6-only hosts.

@@ -22,18 +22,20 @@
 * * *
 
 ## 更新信息
+2026.04.28 menu.sh v3.2.4 1. 修复 wireproxy 获取双栈 WARP 网络的问题; 2. 将 wireproxy DNS 解析策略设置为 auto
+
 2026.04.10 menu.sh v3.2.3 1. 菜单调整：已移除更换 License (warp a) 功能; 2. 优化函数，提升执行效率
-
-2026.03.01 warp-go.sh v1.3.2 为 IPv4 / IPv6 only 主机使用固定 IP 端点
-
-2026.02.25 menu.sh v3.2.2 Restore Reserved configuration for Warp usage; 由于部分地区使用 Warp，仍需保留 Reserved 配置，因此恢复之前的配置文件
-
-2026.02.22 menu.sh v3.2.1 / warp-go.sh v1.3.1 1. 移除系统版本号判断，以支持滚动发行版; 2. cloudflare.now.cc -> cloudflare.nyc.mn
 
 <details>
     <summary>历史更新（点击展开或收起）</summary>
 <br>
 
+>2026.03.01 warp-go.sh v1.3.2 为 IPv4 / IPv6 only 主机使用固定 IP 端点
+>
+>2026.02.25 menu.sh v3.2.2 Restore Reserved configuration for Warp usage; 由于部分地区使用 Warp，仍需保留 Reserved 配置，因此恢复之前的配置文件
+>
+>2026.02.22 menu.sh v3.2.1 / warp-go.sh v1.3.1 1. 移除系统版本号判断，以支持滚动发行版; 2. cloudflare.now.cc -> cloudflare.nyc.mn
+>
 >2026.01.02 menu.sh v3.2.0 / warp-go.sh v1.3.0 1. 账户管理优化： 顺应 Cloudflare 对 WARP 账户政策的调整，移除了已过时的 WARP+ 和 Teams 账户类型，精简了安装流程及账户升级功能（受影响命令：warp a）; 2. 修复卸载 Bug： 修正了 Linux Client 在 Proxy 模式下，卸载程序后误操作路由规则而导致的网络故障问题; 3. 性能提升： 引入自建 IP API 替代第三方接口，显著提升了 IP 信息获取和脚本初始化的速度; 4. 脚本清理： 移除了部分不再使用的冗余脚本提示语及过时代码块，使输出界面更加简洁; 5. 刷 IP 逻辑： 将 Netflix 解锁检测的默认首选项从 IPv4 调整为 IPv6
 >
 >2025.09.10 menu.sh v3.1.8 增强脚本对 Arch Linux 及 EndeavourOS 系统的兼容性
