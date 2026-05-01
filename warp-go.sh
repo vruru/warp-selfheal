@@ -41,8 +41,8 @@ E[13]="\$(date +'%F %T') Try \${i}. Failed. IPv\$NF: \$WAN  \$COUNTRY  \$ASNORG.
 C[13]="\$(date +'%F %T') 尝试第\${i}次，解锁失败，IPv\$NF: \$WAN  \$COUNTRY  \$ASNORG，\${l}秒后重新测试，刷 IP 运行时长: \$DAY 天 \$HOUR 时 \$MIN 分 \$SEC 秒"
 E[14]="1. Brush WARP IPv4\n 2. Brush WARP IPv6 (default)"
 C[14]="1. 刷 WARP IPv4\n 2. 刷 WARP IPv6 (默认)"
-E[15]="The current Netflix region is:\$REGION. To unlock the current region please press [y]. For other addresses please enter two regional abbreviations \(e.g. hk,sg, default:\$REGION\):"
-C[15]="当前 Netflix 地区是:\$REGION，需要解锁当前地区请按 y , 如需其他地址请输入两位地区简写 \(如 hk ,sg，默认:\$REGION\):"
+E[15]="The current Netflix region is:\$REGION. To unlock the current region please press [y]. For other addresses please enter two regional abbreviations (e.g. hk,sg, default:\$REGION):"
+C[15]="当前 Netflix 地区是:\$REGION，需要解锁当前地区请按 y , 如需其他地址请输入两位地区简写 (如 hk ,sg，默认:\$REGION):"
 E[16]="\$(date +'%F %T') Region: \$REGION Done. IPv\$NF: \$WAN  \$COUNTRY  \$ASNORG. Retest after 1 hour. Brush ip runing time:\$DAY days \$HOUR hours \$MIN minutes \$SEC seconds"
 C[16]="\$(date +'%F %T') 区域 \$REGION 解锁成功，IPv\$NF: \$WAN  \$COUNTRY  \$ASNORG，1 小时后重新测试，刷 IP 运行时长: \$DAY 天 \$HOUR 时 \$MIN 分 \$SEC 秒"
 E[17]="WARP network interface and warp-go have been completely removed!"
@@ -139,22 +139,22 @@ E[62]="Congratulations! WARP \$ACCOUNT_TYPE has been turn on. Total time spent:\
 C[62]="恭喜！WARP \$ACCOUNT_TYPE 已开启，总耗时: \$(( end - start ))秒\\\n 脚本当天运行次数: \$TODAY，累计运行次数: \$TOTAL"
 E[63]="Warp-go installation failed. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
 C[63]="warp-go 安装失败，问题反馈: [https://github.com/fscarmen/warp-sh/issues]"
-E[64]="Add WARP IPv4 global network interface for \${NATIVE[n]}, IPv4 priority \(bash warp-go.sh 4\)"
-C[64]="为 \${NATIVE[n]} 添加 WARP IPv4 全局 网络接口，IPv4 优先 \(bash warp-go.sh 4\)"
-E[65]="Add WARP IPv4 global network interface for \${NATIVE[n]}, IPv6 priority \(bash warp-go.sh 4\)"
-C[65]="为 \${NATIVE[n]} 添加 WARP IPv4 全局 网络接口，IPv6 优先 \(bash warp-go.sh 4\)"
-E[66]="Add WARP IPv6 global network interface for \${NATIVE[n]}, IPv4 priority \(bash warp-go.sh 6\)"
-C[66]="为 \${NATIVE[n]} 添加 WARP IPv6 全局 网络接口，IPv4 优先 \(bash warp-go.sh 6\)"
-E[67]="Add WARP IPv6 global network interface for \${NATIVE[n]}, IPv6 priority \(bash warp-go.sh 6\)"
-C[67]="为 \${NATIVE[n]} 添加 WARP IPv6 全局 网络接口，IPv6 优先 \(bash warp-go.sh 6\)"
-E[68]="Add WARP dual-stacks global network interface for \${NATIVE[n]}, IPv4 priority \(bash warp-go.sh d\)"
-C[68]="为 \${NATIVE[n]} 添加 WARP 双栈 全局 网络接口，IPv4 优先 \(bash warp-go.sh d\)"
-E[69]="Add WARP dual-stacks global network interface for \${NATIVE[n]}, IPv6 priority \(bash warp-go.sh d\)"
-C[69]="为 \${NATIVE[n]} 添加 WARP 双栈 全局 网络接口，IPv6 优先 \(bash warp-go.sh d\)"
-E[70]="Add WARP dual-stacks non-global network interface for \${NATIVE[n]}, IPv4 priority \(bash warp-go.sh n\)"
-C[70]="为 \${NATIVE[n]} 添加 WARP 双栈 非全局 网络接口，IPv4 优先 \(bash warp-go.sh n\)"
-E[71]="Add WARP dual-stacks non-global network interface for \${NATIVE[n]}, IPv6 priority \(bash warp-go.sh n\)"
-C[71]="为 \${NATIVE[n]} 添加 WARP 双栈 非全局 网络接口，IPv6 优先 \(bash warp-go.sh n\)"
+E[64]="Add WARP IPv4 global network interface for \${NATIVE[n]}, IPv4 priority (bash warp-go.sh 4)"
+C[64]="为 \${NATIVE[n]} 添加 WARP IPv4 全局 网络接口，IPv4 优先 (bash warp-go.sh 4)"
+E[65]="Add WARP IPv4 global network interface for \${NATIVE[n]}, IPv6 priority (bash warp-go.sh 4)"
+C[65]="为 \${NATIVE[n]} 添加 WARP IPv4 全局 网络接口，IPv6 优先 (bash warp-go.sh 4)"
+E[66]="Add WARP IPv6 global network interface for \${NATIVE[n]}, IPv4 priority (bash warp-go.sh 6)"
+C[66]="为 \${NATIVE[n]} 添加 WARP IPv6 全局 网络接口，IPv4 优先 (bash warp-go.sh 6)"
+E[67]="Add WARP IPv6 global network interface for \${NATIVE[n]}, IPv6 priority (bash warp-go.sh 6)"
+C[67]="为 \${NATIVE[n]} 添加 WARP IPv6 全局 网络接口，IPv6 优先 (bash warp-go.sh 6)"
+E[68]="Add WARP dual-stacks global network interface for \${NATIVE[n]}, IPv4 priority (bash warp-go.sh d)"
+C[68]="为 \${NATIVE[n]} 添加 WARP 双栈 全局 网络接口，IPv4 优先 (bash warp-go.sh d)"
+E[69]="Add WARP dual-stacks global network interface for \${NATIVE[n]}, IPv6 priority (bash warp-go.sh d)"
+C[69]="为 \${NATIVE[n]} 添加 WARP 双栈 全局 网络接口，IPv6 优先 (bash warp-go.sh d)"
+E[70]="Add WARP dual-stacks non-global network interface for \${NATIVE[n]}, IPv4 priority (bash warp-go.sh n)"
+C[70]="为 \${NATIVE[n]} 添加 WARP 双栈 非全局 网络接口，IPv4 优先 (bash warp-go.sh n)"
+E[71]="Add WARP dual-stacks non-global network interface for \${NATIVE[n]}, IPv6 priority (bash warp-go.sh n)"
+C[71]="为 \${NATIVE[n]} 添加 WARP 双栈 非全局 网络接口，IPv6 优先 (bash warp-go.sh n)"
 E[72]="Turn off warp-go (warp-go o)"
 C[72]="关闭 warp-go (warp-go o)"
 E[73]="Turn on warp-go (warp-go o)"
@@ -163,8 +163,8 @@ E[74]="\${WARP_BEFORE[m]} switch to \${WARP_AFTER1[m]} \${SHORTCUT1[m]}"
 C[74]="\${WARP_BEFORE[m]} 转为 \${WARP_AFTER1[m]} \${SHORTCUT1[m]}"
 E[75]="\${WARP_BEFORE[m]} switch to \${WARP_AFTER2[m]} \${SHORTCUT2[m]}"
 C[75]="\${WARP_BEFORE[m]} 转为 \${WARP_AFTER2[m]} \${SHORTCUT2[m]}"
-E[76]="Switch to WARP \${GLOBAL_AFTER}global network interface  \(warp-go g\)"
-C[76]="转为 WARP \${GLOBAL_AFTER}全局 网络接口  \(warp-go g\)"
+E[76]="Switch to WARP \${GLOBAL_AFTER}global network interface  (warp-go g)"
+C[76]="转为 WARP \${GLOBAL_AFTER}全局 网络接口  (warp-go g)"
 E[77]="WAN interface network protocol must be [static] on OpenWrt."
 C[77]="OpenWrt 系统的 WAN 接口的网络传输协议必须为 [静态地址]"
 E[78]="Change the WARP IP to support Netflix (warp-go i)"
@@ -180,14 +180,31 @@ C[82]="同步最新版本 (warp-go v)"
 E[83]="dualstack"
 C[83]="双栈"
 
+# 预处理：扫描 E/C 数组，把含 $ 的条目下标记录到关联数组，避免 text() 每次调用都做多余展开
+declare -A TEXT_NEEDS_EVAL
+for _text_i in "${!E[@]}"; do
+  [[ "${E[${_text_i}]}" == *'$'* || "${C[${_text_i}]}" == *'$'* ]] && TEXT_NEEDS_EVAL[${_text_i}]=1
+done
+
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
 error() { echo -e "\033[31m\033[01m$*\033[0m"; rm -f /tmp/warp-go*; exit 1; }  # 红色
 info() { echo -e "\033[32m\033[01m$*\033[0m"; }   # 绿色
 hint() { echo -e "\033[33m\033[01m$*\033[0m"; }   # 黄色
 reading() { read -rp "$(info "$1")" "$2"; }
-text() { eval echo "\${${L}[$*]}"; }
-text_eval() { eval echo "\$(eval echo "\${${L}[$*]}")"; }
+
+# text <index>：输出当前语言对应的字符串，含 $ 变量的条目用 eval 展开，其余直接 printf
+text() {
+  local -n _text_arr="${L}"
+  local _text_val="${_text_arr[$*]}"
+  if [[ -n "${TEXT_NEEDS_EVAL[$*]}" ]]; then
+    eval "printf '%s' \"${_text_val}\""
+  else
+    printf '%s' "${_text_val}"
+  fi
+}
+
+text_eval() { eval "printf '%s' \"$(eval echo "\${${L}[$*]}")\""; }
 
 # 清理函数
 cleanup_resources() {
@@ -208,7 +225,7 @@ statistics_of_run-times() {
   local UPDATE_OR_GET=$1
   local SCRIPT=$2
   if grep -q 'update' <<< "$UPDATE_OR_GET"; then
-    { wget --no-check-certificate -qO- --timeout=3 "https://stat.cloudflare.now.cc/api/updateStats?script=${SCRIPT}" > /tmp/statistics; }&
+    { wget --no-check-certificate -qO- --timeout=3 "https://stat.cloudflare.now.cc/updateStats?script=${SCRIPT}" > /tmp/statistics; }&
   elif grep -q 'get' <<< "$UPDATE_OR_GET"; then
     [ -s /tmp/statistics ] && [[ $(cat /tmp/statistics) =~ \"todayCount\":([0-9]+),\"totalCount\":([0-9]+) ]] && TODAY="${BASH_REMATCH[1]}" && TOTAL="${BASH_REMATCH[2]}" && rm -f /tmp/statistics
   fi

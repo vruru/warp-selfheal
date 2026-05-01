@@ -22,20 +22,22 @@ English | [中文](README.md)
 * * *
 
 ## Update Information
+2026.05.01 menu.sh v3.2.5 Retry with wireguard-go after kernel WARP IP failure
+
 2026.04.28 menu.sh v3.2.4 1. Fix wireproxy WARP network detection for dual-stack environments; 2. Set wireproxy DNS resolve strategy to auto
 
 2026.04.10 menu.sh v3.2.3 1. Menu adjustment: Removed the change License (warp a) function; 2. Optimize functions to improve execution efficiency
-
-2026.03.01 warp-go.sh v1.3.2 Use fixed IP endpoints on IPv4-only / IPv6-only hosts.
-
-2026.02.25 menu.sh v3.2.2 Restore Reserved configuration for Warp usage;
-
-2026.02.22 mehu.sh v3.2.1 / warp-go.sh v1.3.1 1. Remove OS version checks to support rolling releases; 2. cloudflare.now.cc -> cloudflare.nyc.mn
 
 <details>
     <summary>Historical Updates (click to expand or collapse)</summary>
 <br>
 
+>2026.03.01 warp-go.sh v1.3.2 Use fixed IP endpoints on IPv4-only / IPv6-only hosts.
+>
+>2026.02.25 menu.sh v3.2.2 Restore Reserved configuration for Warp usage;
+>
+>2026.02.22 mehu.sh v3.2.1 / warp-go.sh v1.3.1 1. Remove OS version checks to support rolling releases; 2. cloudflare.now.cc -> cloudflare.nyc.mn
+>
 >2026.01.02 mehu.sh v3.2.0 / warp-go.sh v1.3.0 1. Account: Remove deprecated WARP+ and Teams account types from installation and upgrade processes (warp a) following Cloudflare's adjustments; 2. Bug Fix: Resolve networking breakdown by correcting routing rule handling during Linux Client removal in proxy mode; 3. Performance: Implement self-hosted IP API to significantly improve IP information retrieval speed; 4. Cleanup: Remove obsolete script prompts and redundant UI messages; 5. IP-Brushing Logic: Adjust default Netflix unlock preference from IPv4 to IPv6
 >
 >2025.09.10 menu.sh v3.1.8 Enhance the script's compatibility with Arch Linux and EndeavourOS systems.

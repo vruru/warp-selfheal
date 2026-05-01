@@ -22,6 +22,8 @@
 * * *
 
 ## 更新信息
+2026.05.01 menu.sh v3.2.5 在 wireguard 内核获取 WARP IP 失败后回退重试 wireguard-go
+
 2026.04.28 menu.sh v3.2.4 1. 修复 wireproxy 获取双栈 WARP 网络的问题; 2. 将 wireproxy DNS 解析策略设置为 auto
 
 2026.04.10 menu.sh v3.2.3 1. 菜单调整：已移除更换 License (warp a) 功能; 2. 优化函数，提升执行效率
