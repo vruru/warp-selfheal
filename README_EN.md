@@ -22,6 +22,8 @@ English | [中文](README.md)
 * * *
 
 ## Update Information
+2026.07.06 menu.sh v3.2.6 Resolve route conflict with WARP interface IP by narrowing CIDR range
+
 2026.05.01 menu.sh v3.2.5 Retry with wireguard-go after kernel WARP IP failure
 
 2026.04.28 menu.sh v3.2.4 1. Fix wireproxy WARP network detection for dual-stack environments; 2. Set wireproxy DNS resolve strategy to auto

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-VERSION='3.2.5'
+VERSION='3.2.6'
 
 # 环境变量用于在Debian或Ubuntu操作系统中设置非交互式（noninteractive）安装模式
 export DEBIAN_FRONTEND=noninteractive
@@ -14,8 +14,8 @@ trap on_interrupt_exit INT QUIT TERM
 
 E[0]="\n Language:\n 1. English (default) \n 2. 简体中文"
 C[0]="${E[0]}"
-E[1]="Retry with wireguard-go after kernel WARP IP failure"
-C[1]="在 wireguard 内核获取 WARP IP 失败后回退重试 wireguard-go"
+E[1]="fix: Resolve route conflict with WARP interface IP by narrowing CIDR range"
+C[1]="fix: 通过缩小 CIDR 范围解决 WARP 接口的路由冲突"
 E[2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
 C[2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
 E[3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
@@ -64,8 +64,8 @@ E[24]="Client is on"
 C[24]="Client 已开启"
 E[25]="Port change to \$PORT succeeded."
 C[25]="端口成功更换至 \$PORT"
-E[26]="\${MODE_BEFORE} ---\> \${MODE_AFTER}, Confirm press [y] :"
-C[26]="\${MODE_BEFORE} ---\> \${MODE_AFTER}， 确认请按 [y] :"
+E[26]="\${MODE_BEFORE} ---> \${MODE_AFTER}, Confirm press [y] :"
+C[26]="\${MODE_BEFORE} ---> \${MODE_AFTER}， 确认请按 [y] :"
 E[27]="Local Socks5"
 C[27]="本地 Socks5"
 E[28]="Congratulations! WARP\$TYPE is turned on."
@@ -288,8 +288,8 @@ E[136]="Can only be run using \$KERNEL_OR_WIREGUARD_GO."
 C[136]="只能使用 \$KERNEL_OR_WIREGUARD_GO 运行"
 E[137]="Install using:\n 1. wireguard kernel (default)\n 2. wireguard-go with reserved"
 C[137]="请选择 wireguard 方式:\n 1. wireguard 内核 (默认)\n 2. wireguard-go with reserved"
-E[138]="\${WIREGUARD_BEFORE} ---\> \${WIREGUARD_AFTER}. Confirm press [y] :"
-C[138]="\${WIREGUARD_BEFORE} ---\> \${WIREGUARD_AFTER}， 确认请按 [y] :"
+E[138]="\${WIREGUARD_BEFORE} ---> \${WIREGUARD_AFTER}. Confirm press [y] :"
+C[138]="\${WIREGUARD_BEFORE} ---> \${WIREGUARD_AFTER}， 确认请按 [y] :"
 E[139]="Working mode:\n 1. Global (default)\n 2. Non-global"
 C[139]="工作模式:\n 1. 全局 (默认)\n 2. 非全局"
 E[140]="Failed to get a WARP IP with wireguard kernel. Switching to wireguard-go with reserved and retrying..."
@@ -360,7 +360,8 @@ check_cdn() {
   }
 
   # 直连检测
-  CODE=$(get_code "$API_URL")
+CODE=200
+  #####CODE=$(get_code "$API_URL")
   if [ "$CODE" = '200' ]; then
     GH_PROXY=''
     return
@@ -651,10 +652,10 @@ ip_info() {
   # 对于查 socks5 代理的 IP，需要用另一个 IP api
   if grep -q 'socks5'  <<< "$INTERFACE_SOCK5"; then
     local WAN=$(curl -s -A a --retry 2 $INTERFACE_SOCK5 https://api-ipv${CHECK_46}.ip.sb/ip) &&
-    local IP_JSON=$(curl -sm2 --retry 2 https://ip.cloudflare.nyc.mn/${WAN}${IS_CHINESE}) &&
+    local IP_JSON=$(curl -sm2 --retry 2 http://ip.cloudflare.nyc.mn/${WAN}${IS_CHINESE}) &&
     grep -qi '"isp".*Cloudflare' <<< "$IP_JSON" && local IP_TRACE='on'
   else
-    local IP_JSON=$(curl --retry 2 -ksm2 $INTERFACE_SOCK5 -$CHECK_46 https://ip.cloudflare.nyc.mn${IS_CHINESE}) &&
+    local IP_JSON=$(curl --retry 2 -ksm2 $INTERFACE_SOCK5 -$CHECK_46 http://ip.cloudflare.nyc.mn${IS_CHINESE}) &&
     local IP_TRACE=$(awk -F '"' '/"warp"/{print $4}' <<< "$IP_JSON") &&
     local WAN=$(awk -F '"' '/"ip"/{print $4}' <<< "$IP_JSON")
   fi
@@ -2079,18 +2080,18 @@ EOF
   wait
 
   # WARP 配置修改，172.16.0.0/12 这段是用于 Docker 的
-  MODIFY014="s/\(DNS[ ]\+=[ ]\+\).*/\12606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844,1.1.1.1,8.8.8.8,8.8.4.4/g;7 s/^/PostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;s/^.*\:\:\/0/#&/g;\$a\PersistentKeepalive = 30"
-  MODIFY016="s/\(DNS[ ]\+=[ ]\+\).*/\12606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844,1.1.1.1,8.8.8.8,8.8.4.4/g;7 s/^/PostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;s/^.*0\.\0\/0/#&/g;\$a\PersistentKeepalive = 30"
-  MODIFY01D="s/\(DNS[ ]\+=[ ]\+\).*/\12606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844,1.1.1.1,8.8.8.8,8.8.4.4/g;7 s/^/PostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;\$a\PersistentKeepalive = 30"
-  MODIFY104="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;s/^.*\:\:\/0/#&/g;\$a\PersistentKeepalive = 30"
-  MODIFY106="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;s/^.*0\.\0\/0/#&/g;\$a\PersistentKeepalive = 30"
-  MODIFY10D="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;\$a\PersistentKeepalive = 30"
-  MODIFY114="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;s/^.*\:\:\/0/#&/g;\$a\PersistentKeepalive = 30"
-  MODIFY116="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;s/^.*0\.\0\/0/#&/g;\$a\PersistentKeepalive = 30"
-  MODIFY11D="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;\$a\PersistentKeepalive = 30"
-  MODIFY11N4="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;s/^.*\:\:\/0/#&/g;\$a\PersistentKeepalive = 30"
-  MODIFY11N6="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;s/^.*0\.\0\/0/#&/g;\$a\PersistentKeepalive = 30"
-  MODIFY11ND="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.16.0.0\/12 lookup main\nPostDown = ip -4 rule delete from 172.16.0.0\/12 lookup main\n\n/;\$a\PersistentKeepalive = 30"
+  MODIFY014="s/\(DNS[ ]\+=[ ]\+\).*/\12606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844,1.1.1.1,8.8.8.8,8.8.4.4/g;7 s/^/PostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;s/^.*\:\:\/0/#&/g;\$a\PersistentKeepalive = 30"
+  MODIFY016="s/\(DNS[ ]\+=[ ]\+\).*/\12606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844,1.1.1.1,8.8.8.8,8.8.4.4/g;7 s/^/PostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;s/^.*0\.\0\/0/#&/g;\$a\PersistentKeepalive = 30"
+  MODIFY01D="s/\(DNS[ ]\+=[ ]\+\).*/\12606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844,1.1.1.1,8.8.8.8,8.8.4.4/g;7 s/^/PostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;\$a\PersistentKeepalive = 30"
+  MODIFY104="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;s/^.*\:\:\/0/#&/g;\$a\PersistentKeepalive = 30"
+  MODIFY106="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;s/^.*0\.\0\/0/#&/g;\$a\PersistentKeepalive = 30"
+  MODIFY10D="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;\$a\PersistentKeepalive = 30"
+  MODIFY114="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;s/^.*\:\:\/0/#&/g;\$a\PersistentKeepalive = 30"
+  MODIFY116="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;s/^.*0\.\0\/0/#&/g;\$a\PersistentKeepalive = 30"
+  MODIFY11D="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;\$a\PersistentKeepalive = 30"
+  MODIFY11N4="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;s/^.*\:\:\/0/#&/g;\$a\PersistentKeepalive = 30"
+  MODIFY11N6="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;s/^.*0\.\0\/0/#&/g;\$a\PersistentKeepalive = 30"
+  MODIFY11ND="s/\(DNS[ ]\+=[ ]\+\).*/\11.1.1.1,8.8.8.8,8.8.4.4,2606:4700:4700::1111,2001:4860:4860::8888,2001:4860:4860::8844/g;7 s/^/PostUp = ip -4 rule add from $LAN4 lookup main\nPostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\n/;\$a\PersistentKeepalive = 30"
 
   # 修改配置文件
   sed -i "$(eval echo "\$MODIFY$CONF")" /etc/wireguard/warp.conf
