@@ -2489,9 +2489,9 @@ wireproxy_solution() {
 # 判断当前 WARP 网络接口及 Client 的运行状态，并对应的给菜单和动作赋值
 menu_setting() {
   if [[ "$CLIENT" -gt 1 || "$WIREPROXY" -gt 0 ]]; then
-    [ "$CLIENT" -lt 3 ] && MENU_OPTION[1]="1.  $(text 88)" || MENU_OPTION[1]="1.  $(text 89)"
-    [ "$WIREPROXY" -lt 2 ] && MENU_OPTION[2]="2.  $(text 127)" || MENU_OPTION[2]="2.  $(text 128)"
-    MENU_OPTION[3]="3.  $(text 63)"
+    [ "$CLIENT" -lt 3 ] && MENU_OPTION[1]="$(printf '%3d.' 1) $(text 88)" || MENU_OPTION[1]="$(printf '%3d.' 1) $(text 89)"
+    [ "$WIREPROXY" -lt 2 ] && MENU_OPTION[2]="$(printf '%3d.' 2) $(text 127)" || MENU_OPTION[2]="$(printf '%3d.' 2) $(text 128)"
+    MENU_OPTION[3]="$(printf '%3d.' 3) $(text 63)"
 
     ACTION[1]() { client_onoff; }
     ACTION[2]() { wireproxy_onoff; }
@@ -2501,36 +2501,36 @@ menu_setting() {
     check_stack
     case "$m" in
       [0-2] )
-        MENU_OPTION[1]="1.  $(text 66)"
-        MENU_OPTION[2]="2.  $(text 67)"
-        MENU_OPTION[3]="3.  $(text 68)"
+        MENU_OPTION[1]="$(printf '%3d.' 1) $(text 66)"
+        MENU_OPTION[2]="$(printf '%3d.' 2) $(text 67)"
+        MENU_OPTION[3]="$(printf '%3d.' 3) $(text 68)"
         ACTION[1]() { CONF=${CONF1[n]}; install; }
         ACTION[2]() { CONF=${CONF2[n]}; install; }
         ACTION[3]() { CONF=${CONF3[n]}; install; }
         ;;
       * )
-        MENU_OPTION[1]="1.  $(text 105)"
-        MENU_OPTION[2]="2.  $(text 106)"
+        MENU_OPTION[1]="$(printf '%3d.' 1) $(text 105)"
+        MENU_OPTION[2]="$(printf '%3d.' 2) $(text 106)"
         ACTION[1]() { stack_switch; }
         ACTION[2]() { stack_switch; }
 
         # case * 分支只有2个菜单项，后续从第3项开始
         [ -e /etc/dnsmasq.d/warp.conf ] && IPTABLE_INSTALLED="$(text 92)"
-        wg show warp >/dev/null 2>&1 && MENU_OPTION[3]="3.  $(text 77)" || MENU_OPTION[3]="3.  $(text 71)"
+        wg show warp >/dev/null 2>&1 && MENU_OPTION[3]="$(printf '%3d.' 3) $(text 77)" || MENU_OPTION[3]="$(printf '%3d.' 3) $(text 71)"
         if [ -e /etc/wireguard/warp.conf ]; then
           grep -q '#Table' /etc/wireguard/warp.conf && GLOBAL_OR_NOT="$(text 95)" || GLOBAL_OR_NOT="$(text 96)"
         fi
 
-        MENU_OPTION[4]="4.  ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 82)"
-        MENU_OPTION[5]="5.  $(text 35)"
-        MENU_OPTION[6]="6.  $(text 72)"
-        MENU_OPTION[7]="7.  $(text 73)"
-        MENU_OPTION[8]="8.  $(text 75)"
-        MENU_OPTION[9]="9.  $(text 80)"
-        MENU_OPTION[10]="10. ${IPTABLE_INSTALLED}$(text 57)"
-        MENU_OPTION[11]="11. ${WIREPROXY_INSTALLED}$(text 113)"
-        MENU_OPTION[12]="12. ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
-        MENU_OPTION[0]="0.  $(text 76)"
+        MENU_OPTION[4]="$(printf '%3d.' 4) ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 82)"
+        MENU_OPTION[5]="$(printf '%3d.' 5) $(text 35)"
+        MENU_OPTION[6]="$(printf '%3d.' 6) $(text 72)"
+        MENU_OPTION[7]="$(printf '%3d.' 7) $(text 73)"
+        MENU_OPTION[8]="$(printf '%3d.' 8) $(text 75)"
+        MENU_OPTION[9]="$(printf '%3d.' 9) $(text 80)"
+        MENU_OPTION[10]="$(printf '%3d.' 10) ${IPTABLE_INSTALLED}$(text 57)"
+        MENU_OPTION[11]="$(printf '%3d.' 11) ${WIREPROXY_INSTALLED}$(text 113)"
+        MENU_OPTION[12]="$(printf '%3d.' 12) ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
+        MENU_OPTION[0]="$(printf '%3d.' 0) $(text 76)"
 
         ACTION[3]() { OPTION=o; onoff; }
         ACTION[4]() { client_install; }; ACTION[5]() { change_ip; }; ACTION[6]() { uninstall; }; ACTION[7]() { bbrInstall; }; ACTION[8]() { ver; };
@@ -2544,21 +2544,21 @@ menu_setting() {
   fi
 
   [ -e /etc/dnsmasq.d/warp.conf ] && IPTABLE_INSTALLED="$(text 92)"
-  wg show warp >/dev/null 2>&1 && MENU_OPTION[4]="4.  $(text 77)" || MENU_OPTION[4]="4.  $(text 71)"
+  wg show warp >/dev/null 2>&1 && MENU_OPTION[4]="$(printf '%3d.' 4) $(text 77)" || MENU_OPTION[4]="$(printf '%3d.' 4) $(text 71)"
   if [ -e /etc/wireguard/warp.conf ]; then
     grep -q '#Table' /etc/wireguard/warp.conf && GLOBAL_OR_NOT="$(text 95)" || GLOBAL_OR_NOT="$(text 96)"
   fi
 
-  MENU_OPTION[5]="5.  ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 82)"
-  MENU_OPTION[6]="6.  $(text 35)"
-  MENU_OPTION[7]="7.  $(text 72)"
-  MENU_OPTION[8]="8.  $(text 73)"
-  MENU_OPTION[9]="9.  $(text 75)"
-  MENU_OPTION[10]="10. $(text 80)"
-  MENU_OPTION[11]="11. ${IPTABLE_INSTALLED}$(text 57)"
-  MENU_OPTION[12]="12. ${WIREPROXY_INSTALLED}$(text 113)"
-  MENU_OPTION[13]="13. ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
-  MENU_OPTION[0]="0.  $(text 76)"
+  MENU_OPTION[5]="$(printf '%3d.' 5) ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 82)"
+  MENU_OPTION[6]="$(printf '%3d.' 6) $(text 35)"
+  MENU_OPTION[7]="$(printf '%3d.' 7) $(text 72)"
+  MENU_OPTION[8]="$(printf '%3d.' 8) $(text 73)"
+  MENU_OPTION[9]="$(printf '%3d.' 9) $(text 75)"
+  MENU_OPTION[10]="$(printf '%3d.' 10) $(text 80)"
+  MENU_OPTION[11]="$(printf '%3d.' 11) ${IPTABLE_INSTALLED}$(text 57)"
+  MENU_OPTION[12]="$(printf '%3d.' 12) ${WIREPROXY_INSTALLED}$(text 113)"
+  MENU_OPTION[13]="$(printf '%3d.' 13) ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
+  MENU_OPTION[0]="$(printf '%3d.' 0) $(text 76)"
 
   ACTION[4]() { OPTION=o; onoff; }
   ACTION[5]() { client_install; }; ACTION[6]() { change_ip; }; ACTION[7]() { uninstall; }; ACTION[8]() { bbrInstall; }; ACTION[9]() { ver; };
