@@ -22,18 +22,20 @@
 * * *
 
 ## 更新信息
+2026.08.08 menu.sh v3.2.7 1. 优化 IPv6 路由规则，同网段地址均能正常访问; 2. 新增内置自动保活 —— 定时检测 WARP 接口状态，掉线后自动重新获取新的 WARP IP，避免网络中断\n 旧版升级一句命令: bash <(curl -sSL https://raw.githubusercontent.com/fscarmen/tools/main/keepalive-upgrade.sh)
+
 2026.07.06 menu.sh v3.2.6 通过缩小 CIDR 范围解决 WARP 接口的路由冲突
 
 2026.05.01 menu.sh v3.2.5 在 wireguard 内核获取 WARP IP 失败后回退重试 wireguard-go
-
-2026.04.28 menu.sh v3.2.4 1. 修复 wireproxy 获取双栈 WARP 网络的问题; 2. 将 wireproxy DNS 解析策略设置为 auto
-
-2026.04.10 menu.sh v3.2.3 1. 菜单调整：已移除更换 License (warp a) 功能; 2. 优化函数，提升执行效率
 
 <details>
     <summary>历史更新（点击展开或收起）</summary>
 <br>
 
+>2026.04.28 menu.sh v3.2.4 1. 修复 wireproxy 获取双栈 WARP 网络的问题; 2. 将 wireproxy DNS 解析策略设置为 auto
+>
+>2026.04.10 menu.sh v3.2.3 1. 菜单调整：已移除更换 License (warp a) 功能; 2. 优化函数，提升执行效率
+>
 >2026.03.01 warp-go.sh v1.3.2 为 IPv4 / IPv6 only 主机使用固定 IP 端点
 >
 >2026.02.25 menu.sh v3.2.2 Restore Reserved configuration for Warp usage; 由于部分地区使用 Warp，仍需保留 Reserved 配置，因此恢复之前的配置文件

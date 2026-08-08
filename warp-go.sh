@@ -1090,25 +1090,28 @@ install() {
 
     register_api warp.conf 58
 
-    # 生成非全局执行文件并赋权
-    cat > /opt/warp-go/NonGlobalUp.sh << EOF
-sleep 5
-ip -4 rule add oif WARP lookup 60000
-ip -4 rule add table main suppress_prefixlength 0
-ip -4 route add default dev WARP table 60000
-ip -6 rule add oif WARP lookup 60000
-ip -6 rule add table main suppress_prefixlength 0
-ip -6 route add default dev WARP table 60000
+    # 生成非全局执行文件并赋权（与 menu.sh 的 NonGlobal.sh 结构一致，start / stop 参数）
+    cat > /opt/warp-go/NonGlobal.sh <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  start)
+    sleep 5
+    ip -4 rule add oif WARP lookup 60000
+    ip -4 rule add table main suppress_prefixlength 0
+    ip -4 route add default dev WARP table 60000
+    ip -6 rule add oif WARP lookup 60000
+    ip -6 rule add table main suppress_prefixlength 0
+    ip -6 route add default dev WARP table 60000
+    ;;
+  stop)
+    ip -4 rule delete oif WARP lookup 60000
+    ip -4 rule delete table main suppress_prefixlength 0
+    ip -6 rule delete oif WARP lookup 60000
+    ip -6 rule delete table main suppress_prefixlength 0
+    ;;
+esac
 EOF
-
-cat > /opt/warp-go/NonGlobalDown.sh << EOF
-ip -4 rule delete oif WARP lookup 60000
-ip -4 rule delete table main suppress_prefixlength 0
-ip -6 rule delete oif WARP lookup 60000
-ip -6 rule delete table main suppress_prefixlength 0
-EOF
-
-    chmod +x /opt/warp-go/NonGlobalUp.sh /opt/warp-go/NonGlobalDown.sh
+    chmod +x /opt/warp-go/NonGlobal.sh
 
     info "\n $(text 61) \n"
   }
@@ -1130,25 +1133,77 @@ EOF
   # 如有所有 endpoint 都不能连通的情况，脚本中止
   [ ! -s /tmp/warp-go-endpoint ] && error " $(text 114) "
 
-  # warp-go 配置修改，其中用到的 162.159.192.1 和 2606:4700:d0::a29f:c001 均是 engage.cloudflareclient.com 的 IP; 172.17.0.0/24 这段是用于 Docker 的
+  # 一次性生成 warp.conf：按条件拼接后直接写入文件，替代模板+多次 sed 修改
+  # 其中用到的 162.159.192.1 和 2606:4700:d0::a29f:c001 均是 engage.cloudflareclient.com 的 IP; 172.17.0.0/24 这段是用于 Docker 的
   MTU=$(cat /tmp/warp-go-mtu) && rm -f /tmp/warp-go-mtu
-  MODIFY014="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = 0.0.0.0/0#g; s#.*PostUp.*#PostUp = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g; s#engage.cloudflareclient.com#[2606:4700:d0::a29f:c001]#"
-  MODIFY016="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = ::/0#g; s#.*PostUp.*#PostUp   = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g; s#engage.cloudflareclient.com#[2606:4700:d0::a29f:c001]#"
-  MODIFY01D="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = 0.0.0.0/0,::/0#g; s#.*PostUp.*#PostUp = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g; s#engage.cloudflareclient.com#[2606:4700:d0::a29f:c001]#"
-  MODIFY104="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = 0.0.0.0/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g; s#engage.cloudflareclient.com#162.159.192.1#"
-  MODIFY106="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = ::/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g; s#engage.cloudflareclient.com#162.159.192.1#"
-  MODIFY10D="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = 0.0.0.0/0,::/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g; s#engage.cloudflareclient.com#162.159.192.1#"
-  MODIFY114="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = 0.0.0.0/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g"
-  MODIFY116="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = ::/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g"
-  MODIFY11D="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = 0.0.0.0/0,::/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g"
-  MODIFY11N4="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = 0.0.0.0/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g"
-  MODIFY11N6="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = ::/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g"
-  MODIFY11ND="/Endpoint6/d; /PreUp/d; /::\/0/d; s#.*AllowedIPs.*#AllowedIPs = 0.0.0.0/0,::/0#g; s#.*PostUp.*#PostUp = ip -4 rule add from $LAN4 lookup main\nPostUp = ip -6 rule add from $LAN6 lookup main#g; s#.*PostDown.*#PostDown = ip -4 rule delete from $LAN4 lookup main\nPostDown = ip -6 rule delete from $LAN6 lookup main\nPostUp = ip -4 rule add from 172.17.0.0\/24 lookup main\nPostDown = ip -4 rule delete from 172.17.0.0\/24 lookup main\n\#PostUp = /opt/warp-go/NonGlobalUp.sh\n\#PostDown = /opt/warp-go/NonGlobalDown.sh#g; s#\(MTU.*\)1280#\1$MTU#g"
 
-  sed -i "$(eval echo "\$MODIFY$CONF")" /opt/warp-go/warp.conf
+  # 按 CONF 编码（前缀 0*=IPv6 / 10*=IPv4 / 11*=双栈）选择 Endpoint 与 PostUp/PostDown 规则，172.17.0.0/24 为 Docker 网段固定追加
+  local ENDPOINT RULES
+  case "$CONF" in
+    0*)
+      ENDPOINT='[2606:4700:d0::a29f:c001]:2408'
+      RULES="PostUp = ip -6 rule add from $LAN6 lookup main
+PostDown = ip -6 rule delete from $LAN6 lookup main
+PostUp = ip -4 rule add from 172.17.0.0/24 lookup main
+PostDown = ip -4 rule delete from 172.17.0.0/24 lookup main
+" ;;
+    10*)
+      ENDPOINT='162.159.192.1:2408'
+      RULES="PostUp = ip -4 rule add from $LAN4 lookup main
+PostDown = ip -4 rule delete from $LAN4 lookup main
+PostUp = ip -4 rule add from 172.17.0.0/24 lookup main
+PostDown = ip -4 rule delete from 172.17.0.0/24 lookup main
+" ;;
+    11*)
+      ENDPOINT='engage.cloudflareclient.com:2408'
+      RULES="PostUp = ip -4 rule add from $LAN4 lookup main
+PostUp = ip -6 rule add from $LAN6 lookup main
+PostDown = ip -4 rule delete from $LAN4 lookup main
+PostDown = ip -6 rule delete from $LAN6 lookup main
+PostUp = ip -4 rule add from 172.17.0.0/24 lookup main
+PostDown = ip -4 rule delete from 172.17.0.0/24 lookup main
+" ;;
+  esac
 
-  # 如为 WARP IPv4 非全局，修改配置文件，在路由表插入规则
-  [ "$OPTION" = n ] && STATUS=3 && global_switch
+  # AllowedIPs（后缀 4=仅 IPv4 / 6=仅 IPv6 / D=双栈）
+  local ALLOWED
+  case "${CONF: -1}" in
+    4) ALLOWED='AllowedIPs = 0.0.0.0/0' ;;
+    6) ALLOWED='AllowedIPs = ::/0' ;;
+    *) ALLOWED='AllowedIPs = 0.0.0.0/0,::/0' ;;
+  esac
+
+  # 非全局模式：注释 AllowedIPs 并启用 NonGlobal 脚本
+  local NONGLOBAL_UP='#PostUp = /opt/warp-go/NonGlobal.sh start' NONGLOBAL_DOWN='#PostDown = /opt/warp-go/NonGlobal.sh stop'
+  [ "$OPTION" = n ] && { ALLOWED="#$ALLOWED"; NONGLOBAL_UP='PostUp = /opt/warp-go/NonGlobal.sh start'; NONGLOBAL_DOWN='PostDown = /opt/warp-go/NonGlobal.sh stop'; }
+
+  # 先提取账户信息到变量（heredoc 输出会先截断文件，不能边写边读同一文件）
+  local ACCOUNT_DEVICE=$(awk '/^Device/{print $NF}' /opt/warp-go/warp.conf)
+  local ACCOUNT_PRIVATEKEY=$(awk '/^PrivateKey/{print $NF}' /opt/warp-go/warp.conf)
+  local ACCOUNT_TOKEN=$(awk '/^Token/{print $NF}' /opt/warp-go/warp.conf)
+  local ACCOUNT_TYPE=$(awk '/^Type/{print $NF}' /opt/warp-go/warp.conf)
+
+  cat > /opt/warp-go/warp.conf << EOF
+[Account]
+Device = $ACCOUNT_DEVICE
+PrivateKey = $ACCOUNT_PRIVATEKEY
+Token = $ACCOUNT_TOKEN
+Type = $ACCOUNT_TYPE
+
+[Device]
+Name = WARP
+MTU  = $MTU
+
+[Peer]
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+Endpoint = $ENDPOINT
+KeepAlive = 30
+$ALLOWED
+
+[Script]
+$RULES$NONGLOBAL_UP
+$NONGLOBAL_DOWN
+EOF
 
   # 创建 warp-go systemd 进程守护(Alpine 系统除外)
   if echo "$SYSTEM" | grep -qvE "Alpine|OpenWrt"; then

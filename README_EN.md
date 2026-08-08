@@ -22,18 +22,20 @@ English | [中文](README.md)
 * * *
 
 ## Update Information
+2026.08.08 menu.sh v3.2.7 1. Optimize IPv6 routing rules — cover the whole /64 subnet; 2. Add built-in auto keepalive — periodically check the WARP interface and auto re-register a new IP when it drops, preventing network loss\n Upgrade existing install: bash <(curl -sSL https://raw.githubusercontent.com/fscarmen/tools/main/keepalive-upgrade.sh)
+
 2026.07.06 menu.sh v3.2.6 Resolve route conflict with WARP interface IP by narrowing CIDR range
 
 2026.05.01 menu.sh v3.2.5 Retry with wireguard-go after kernel WARP IP failure
-
-2026.04.28 menu.sh v3.2.4 1. Fix wireproxy WARP network detection for dual-stack environments; 2. Set wireproxy DNS resolve strategy to auto
-
-2026.04.10 menu.sh v3.2.3 1. Menu adjustment: Removed the change License (warp a) function; 2. Optimize functions to improve execution efficiency
 
 <details>
     <summary>Historical Updates (click to expand or collapse)</summary>
 <br>
 
+>2026.04.28 menu.sh v3.2.4 1. Fix wireproxy WARP network detection for dual-stack environments; 2. Set wireproxy DNS resolve strategy to auto
+>
+>2026.04.10 menu.sh v3.2.3 1. Menu adjustment: Removed the change License (warp a) function; 2. Optimize functions to improve execution efficiency
+>
 >2026.03.01 warp-go.sh v1.3.2 Use fixed IP endpoints on IPv4-only / IPv6-only hosts.
 >
 >2026.02.25 menu.sh v3.2.2 Restore Reserved configuration for Warp usage;
