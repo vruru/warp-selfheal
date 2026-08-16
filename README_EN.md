@@ -374,6 +374,13 @@ wget -N https://gitlab.com/fscarmen/warp/-/raw/main/api.sh && bash api.sh [optio
   | -u/--unbind   | Unbind device |
   | -c/--cancle   | Cancel account |
   | -i/--id       | Display cliend id and reserved |
+  | -m/--masque-register | Register a MASQUE account |
+  | -s/--masque-enroll  | Enroll an existing MASQUE account |
+  | -g/--config          | MASQUE config file (default: config.json) |
+  | -p/--device-name     | Set device name when registering or enrolling |
+  | -k/--regen-key       | Force regenerate key pair during enroll/update |
+  | -o/--organization string | Team organization name, automatically obtain Team Token via email verification code (requires parameter) |
+  | -e/--email string        | Team email (requires parameter) |
 
 ## How to Brush Netflix Unlock WARP IP
 

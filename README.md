@@ -339,6 +339,13 @@ wget -N https://gitlab.com/fscarmen/warp/-/raw/main/api.sh && bash api.sh [optio
   | -u/--unbind   | 解绑设备 |
   | -c/--cancle   | 注销账户 |
   | -i/--id       | 显示 cliend id 与 reserved |
+  | -m/--masque-register | 注册 MASQUE 账户 |
+  | -s/--masque-enroll  | 续期 MASQUE 账户 |
+  | -g/--config          | MASQUE 配置文件 (默认: config.json) |
+  | -p/--device-name     | 注册或续期时设置设备名称 |
+  | -k/--regen-key       | 续期或更新时强制重新生成密钥对 |
+  | -o/--organization string | Team 组织名，通过邮箱验证码自动获取 Team Token 并注册 (需输入参数) |
+  | -e/--email string        | Team 邮箱 (需输入参数) |
 
 
 ## 刷 Netflix 解锁 WARP IP 的方法
