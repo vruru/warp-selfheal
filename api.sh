@@ -31,6 +31,136 @@ help() {
 EOF
 }
 
+# ====== HTTP helper: curl preferred, wget fallback ======
+req() {
+  # curl takes priority
+  if command -v curl >/dev/null 2>&1; then
+    curl "$@"
+    return $?
+  fi
+
+  # wget fallback: translate the curl options used in this script into wget
+  local url="" method="" post_data="" timeout="" o
+  local merge_stderr=0 spider=0
+  local -a w=( -q --no-check-certificate )
+
+  while [[ $# -gt 0 ]]; do
+    o="$1"
+    case "$o" in
+      --silent|-s|-S|--tlsv1.3|-L|--location|-sSL) : ;;
+      -m*) timeout="${o#-m}" ;;
+      --max-time) timeout="${2:-}"; shift ;;
+      --request) method="${2:-}"; shift ;;
+      --data|--data-raw|--data-binary) post_data="${2:-}"; shift ;;
+      --header|-H) w+=( --header="${2:-}" ); shift ;;
+      --head|-I) spider=1; w+=( --server-response ); merge_stderr=1 ;;
+      --include|-i) w+=( --server-response ); merge_stderr=1 ;;
+      --spider) spider=1 ;;
+      *)
+        if [[ "$o" == http* ]]; then
+          url="$o"
+        else
+          w+=( "$o" )
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  [[ -z "$url" ]] && return 1
+  [[ -n "$timeout" ]] && w+=( --timeout="$timeout" )
+
+  # send the response body to stdout unless this is a headers-only request
+  (( spider )) || w+=( -O - )
+
+  if [[ -n "$post_data" ]]; then
+    if [[ -n "$method" ]]; then
+      w+=( --method="$method" --body-data="$post_data" )
+    else
+      # curl --data/--data-raw defaults to POST
+      w+=( --post-data="$post_data" )
+    fi
+  elif [[ -n "$method" ]]; then
+    w+=( --method="$method" )
+  fi
+
+  w+=( "$url" )
+
+  if (( merge_stderr )); then
+    # wget prints response headers to stderr; merge them so the caller's
+    # awk/grep pipelines (which expect headers on stdout) keep working
+    wget "${w[@]}" 2>&1
+  else
+    wget "${w[@]}"
+  fi
+}
+
+# ====== JSON helper: pure-bash/awk JSON pretty printer ======
+# Validate JSON on stdin (0 = valid, 1 = invalid) without any external tool
+json_is_valid() {
+  awk 'BEGIN{in_str=0;ob=0;cb=0;oa=0;ca=0;top=0}
+    {
+      len=length($0);
+      for(i=1;i<=len;i++){
+        c=substr($0,i,1);
+        if(in_str){
+          if(c=="\\"){i++} else if(c=="\""){in_str=0}
+          continue
+        }
+        if(c=="\""){in_str=1;continue}
+        if(c=="{"){ob++;top=1}
+        else if(c=="}"){cb++}
+        else if(c=="["){oa++;top=1}
+        else if(c=="]"){ca++}
+      }
+      if(in_str) exit 1
+    }
+    END{if(in_str||ob!=cb||oa!=ca||top==0) exit 1; else exit 0}'
+}
+
+# Handles strings, collapses whitespace, indents object/array nesting 2 spaces per level
+json_pretty() {
+  awk 'BEGIN{in_str=0;depth=0;ind="  "}
+    {
+      len=length($0);
+      for(i=1;i<=len;i++){
+        c=substr($0,i,1);
+        if(in_str){
+          printf "%s", c;
+          if(c=="\\"){ i++; printf "%s", substr($0,i,1) }
+          else if(c=="\""){ in_str=0 }
+          continue
+        }
+        if(c=="\"" ){ in_str=1; printf "%s", c; continue }
+        if(c==" " || c=="\t" || c=="\r"){ continue }
+        if(c=="{" || c=="["){
+          printf "%s\n", c;
+          depth++;
+          for(d=0;d<depth;d++) printf "%s", ind;
+          continue
+        }
+        if(c=="}" || c=="]"){
+          printf "\n";
+          depth--; if(depth<0) depth=0;
+          for(d=0;d<depth;d++) printf "%s", ind;
+          printf "%s", c;
+          continue
+        }
+        if(c==","){
+          printf "%s\n", c;
+          for(d=0;d<depth;d++) printf "%s", ind;
+          continue
+        }
+        if(c==":"){
+          printf ": ";
+          continue
+        }
+        printf "%s", c
+      }
+      print ""
+    }' | sed '/^[[:space:]]*$/d'
+}
+
 # ====== MASQUE Key generation helpers ======
 generate_private_key() {
   PRIVATE_KEY=$(openssl ecparam -name prime256v1 -genkey -noout -outform DER | base64 --wrap=0)
@@ -51,19 +181,19 @@ process_registration_response() {
   local response=$1
 
   # Extract JSON fields
-  ID=$(echo "$response" | python3 -m json.tool | awk -F '"' '/"id":/{print $4; exit}')
+  ID=$(echo "$response" | awk -F '"' '/"id":/{print $4; exit}')
 
   if [ -z "$ID" ] || [ "$ID" = "null" ]; then
     echo "Error: Failed to extract ID from response" >&2
     exit 1
   fi
 
-  LICENSE=$(echo "$response" | python3 -m json.tool | awk -F '"' '/"license":/{print $4}')
-  IPV4=$(echo "$response" | python3 -m json.tool | grep -A 5 '"interface":' | awk -F '"' '/"v4":/{print $4; exit}')
-  IPV6=$(echo "$response" | python3 -m json.tool | grep -A 5 '"interface":' | awk -F '"' '/"v6":/{print $4; exit}')
-  ENDPOINT_V4=$(echo "$response" | python3 -m json.tool | grep -A 5 '"endpoint":' | awk -F '"' '/"v4":/{print $4; exit}' | sed -E 's/:([0-9]+)?$//')
-  ENDPOINT_V6=$(echo "$response" | python3 -m json.tool | grep -A 5 '"endpoint":' | awk -F '"' '/"v6":/{print $4; exit}' | sed -E 's/^\[(.*)\]:[0-9]+$/\1/')
-  ENDPOINT_PUB_KEY=$(echo "$response" | python3 -m json.tool | awk -F '"' '/"public_key":/{print $4}')
+  LICENSE=$(echo "$response" | awk -F '"' '/"license":/{print $4}')
+  IPV4=$(echo "$response" | sed -n 's/.*"v4":"\([^"]*\)".*/\1/p')
+  IPV6=$(echo "$response" | sed -n 's/.*"v6":"\([^"]*\)".*/\1/p')
+  ENDPOINT_V4=$(echo "$response" | sed -n 's/.*"endpoint":{[^}]*"v4":"\([^"]*\)".*/\1/p' | sed -E 's/:([0-9]+)?$//')
+  ENDPOINT_V6=$(echo "$response" | sed -n 's/.*"endpoint":{[^}]*"v6":"\([^"]*\)".*/\1/p' | sed -E 's/^\[(.*)\]:[0-9]+$/\1/')
+  ENDPOINT_PUB_KEY=$(echo "$response" | awk -F '"' '/"public_key":/{print $4}')
 
   # Build new JSON config file
   cat > "$CONFIG_FILE" <<EOF
@@ -88,14 +218,13 @@ EOF
 update_and_save_config() {
   local base_response=$1
 
-  ID=$(echo "$base_response" | python3 -m json.tool | grep -m 1 '"id"' | sed -E 's/.*"id": "([^"]*)".*/\1/')
-  ACCESS_TOKEN=$(echo "$base_response" | python3 -m json.tool | grep -m 1 -E '"token"|access_token' | sed -E 's/.*": "([^"]*)".*/\1/')
+  ID=$(echo "$base_response" | sed -E 's/.*"id":\s*"([^"]*)".*/\1/')
+  ACCESS_TOKEN=$(echo "$base_response" | sed -E 's/.*"(token|access_token)":\s*"([^"]*)".*/\2/')
 
   # Check if enroll without forced key regeneration
   if [ "$ACTION" = "enroll" ] && [ "$REGEN_KEY" = false ] && [ -n "$PRIVATE_KEY" ]; then
     # During enroll, reuse existing PRIVATE_KEY if not forced to regenerate
     echo "Using existing private/public key pair for enrollment." >&2
-    # Recalculate PUBLIC_KEY if not yet set
     if [ -z "$PUBLIC_KEY" ]; then
       derive_public_key
     fi
@@ -104,23 +233,18 @@ update_and_save_config() {
     if [ "$REGEN_KEY" = true ] || [ -n "$DEVICE_NAME" ]; then
       echo "Generating new key pair..." >&2
       generate_private_key
-      # Recalculate public_key after regenerating private_key
       derive_public_key
     else
-      # Try to get private_key from base_response if not specified
       if [ -n "$PRIVATE_KEY" ]; then
-        # PRIVATE_KEY already set in enroll_account
-        # Recalculate PUBLIC_KEY if not yet set
         if [ -z "$PUBLIC_KEY" ]; then
           derive_public_key
         fi
       else
-        PRIVATE_KEY=$(echo "$base_response" | python3 -m json.tool | grep -m 1 '"private_key"' | sed -E 's/.*"private_key": "([^"]*)".*/\1/')
+        PRIVATE_KEY=$(echo "$base_response" | sed -E 's/.*"private_key":\s*"([^"]*)".*/\1/')
         if [ -z "$PRIVATE_KEY" ] || [ "$PRIVATE_KEY" = "null" ]; then
           echo "No existing private key found, generating new one..." >&2
           generate_private_key
         fi
-        # Ensure a matching public_key in all cases
         derive_public_key
       fi
     fi
@@ -132,24 +256,24 @@ update_and_save_config() {
   fi
   REQUEST_DATA+="}"
 
-  RESPONSE=$(curl --silent --request PATCH "https://api.cloudflareclient.com/v0a4471/reg/$ID" \
+  RESPONSE=$(req --silent --request PATCH "https://api.cloudflareclient.com/v0a4471/reg/$ID" \
     --header "User-Agent: WARP for Android" \
     --header "CF-Client-Version: a-6.35-4471" \
     --header "Content-Type: application/json; charset=UTF-8" \
     --header "Authorization: Bearer $ACCESS_TOKEN" \
     --data "$REQUEST_DATA")
 
-  if ! echo "$RESPONSE" | python3 -m json.tool >/dev/null 2>&1; then
+  if ! json_is_valid <<<"$RESPONSE"; then
     echo "Error: API response not valid JSON" >&2
     echo "$RESPONSE" >&2; exit 1
   fi
-  if echo "$RESPONSE" | python3 -m json.tool | grep -q '"error"'; then
+  if echo "$RESPONSE" | grep -q '"error"'; then
     echo "Error during update:" >&2
-    echo "$RESPONSE" | python3 -m json.tool >&2; exit 1
+    echo "$RESPONSE" | json_pretty >&2; exit 1
   fi
 
   # Insert access_token before warp_enabled
-  FORMATTED_RESPONSE=$(echo "$RESPONSE" | python3 -m json.tool | sed "/\"warp_enabled\".*/i\    \"token\": \"$ACCESS_TOKEN\",")
+  FORMATTED_RESPONSE=$(echo "$RESPONSE" | json_pretty | sed "/\"warp_enabled\".*/i\    \"token\": \"$ACCESS_TOKEN\",")
 
   # Save to file if REGISTER_PATH is set
   if [ -n "$REGISTER_PATH" ]; then
@@ -168,7 +292,7 @@ masque_register_account() {
   derive_public_key
   generate_device_ids
 
-  RESPONSE=$(curl --silent --request POST "https://api.cloudflareclient.com/v0a4471/reg" \
+  RESPONSE=$(req --silent --request POST "https://api.cloudflareclient.com/v0a4471/reg" \
     --header "Content-Type: application/json" \
     --data '{
       "key": "'"$PRIVATE_KEY"'",
@@ -180,13 +304,13 @@ masque_register_account() {
       "tunnel_type": "masque"
     }')
 
-  if ! echo "$RESPONSE" | python3 -m json.tool >/dev/null 2>&1; then
+  if ! json_is_valid <<<"$RESPONSE"; then
     echo "Error: API response not valid JSON" >&2
     echo "$RESPONSE" >&2; exit 1
   fi
-  if echo "$RESPONSE" | python3 -m json.tool | grep -q '"error"'; then
+  if echo "$RESPONSE" | grep -q '"error"'; then
     echo "Error during registration:" >&2
-    echo "$RESPONSE" | python3 -m json.tool >&2; exit 1
+    echo "$RESPONSE" | json_pretty >&2; exit 1
   fi
 
   update_and_save_config "$RESPONSE"
@@ -207,7 +331,6 @@ masque_enroll_account() {
     exit 1
   fi
 
-  # Determine if public key needs regeneration
   [ "$REGEN_KEY" = false ] && derive_public_key
 
   update_and_save_config "$BASE_RESPONSE"
@@ -215,31 +338,25 @@ masque_enroll_account() {
 
 # Fetch account information
 fetch_account_information() {
-  # If no account file, prompt for Device ID and API token
   if [ -s "$REGISTER_PATH" ]; then
-    # Teams account file
     if grep -q 'xml version' $REGISTER_PATH; then
       ID=$(grep 'correlation_id' $REGISTER_PATH | sed "s#.*>\(.*\)<.*#\1#")
       TOKEN=$(grep 'warp_token' $REGISTER_PATH | sed "s#.*>\(.*\)<.*#\1#")
       CLIENT_ID=$(grep 'client_id' $REGISTER_PATH | sed "s#.*client_id&quot;:&quot;\([^&]\{4\}\)&.*#\1#")
 
-    # Official API file, default: /etc/wireguard/warp-account.conf
     elif grep -q 'client_id' $REGISTER_PATH; then
       ID=$(awk -F '"' '/"id"/ {print $4; exit}' "$REGISTER_PATH")
       TOKEN=$(awk -F '"' '/"token"/ {print $4; exit}' "$REGISTER_PATH")
       CLIENT_ID=$(awk -F '"' '/client_id/ {print $4; exit}' "$REGISTER_PATH")
 
-    # Client file, default: /var/lib/cloudflare-warp/reg.json
     elif grep -q 'registration_id' $REGISTER_PATH; then
       ID=$(sed 's/.*registration_id":"\([^"]\+\)".*/\1/' "$REGISTER_PATH")
       TOKEN=$(sed 's/.*api_token":"\([^"]\+\)".*/\1/' "$REGISTER_PATH")
 
-    # wgcf file, default: /etc/wireguard/wgcf-account.toml
     elif grep -q 'access_token' $REGISTER_PATH; then
       ID=$(awk -F"'" '/device_id/ {print $2; exit}' "$REGISTER_PATH")
       TOKEN=$(awk -F"'" '/access_token/ {print $2; exit}' "$REGISTER_PATH")
 
-    # warp-go file, default: /opt/warp-go/warp.conf
     elif grep -q 'PrivateKey' $REGISTER_PATH; then
       ID=$(awk '/^Device/ {print $NF; exit}' "$REGISTER_PATH")
       TOKEN=$(awk '/^Token/ {print $NF; exit}' "$REGISTER_PATH")
@@ -266,12 +383,10 @@ fetch_account_information() {
 
 # Register WARP account
 register_account() {
-  # Generate WireGuard key pair and append private key
   if [ -x "$(type -p wg)" ]; then
     PRIVATE_KEY=$(wg genkey)
     PUBLIC_KEY=$(wg pubkey <<<"$PRIVATE_KEY")
   elif [[ -x "$(type -p openssl)" && -x "$(type -p base64)" ]]; then
-    # No xxd dependency, extract key via PKCS#8 DER tail 32 bytes
     KEY_DER=$(openssl genpkey -algorithm X25519 -outform DER | base64 | tr -d '\n')
     PRIVATE_KEY=$(echo -n "$KEY_DER" | base64 -d | tail -c 32 | base64 | tr -d '\n')
     PUBLIC_KEY=$(echo -n "$KEY_DER" | base64 -d | openssl pkey -inform DER -pubout -outform DER | tail -c 32 | base64 | tr -d '\n')
@@ -280,7 +395,7 @@ register_account() {
     PRIVATE_KEY=$(echo $KEY_PAIR | sed 's/.*priv:\(.*\)pub.*/\1/; s/ //g' | xxd -r -p | base64)
     PUBLIC_KEY=$(echo $KEY_PAIR | sed 's/.*pub://; s/ //g'| xxd -r -p | base64)
   else
-    WG_API=$(curl -m5 -sSL "https://warp.cloudflare.now.cc/?run=key&format=yaml")
+    WG_API=$(req -m5 -sSL "https://warp.cloudflare.now.cc/?run=key&format=yaml")
     PRIVATE_KEY=$(awk 'NR==2 {print $2}' <<<"$WG_API")
     PUBLIC_KEY=$(awk 'NR==1 {print $2}' <<<"$WG_API")
   fi
@@ -289,10 +404,9 @@ register_account() {
     INSTALL_ID=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 22)
     FCM_TOKEN="${INSTALL_ID}:APA91b$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 134)"
 
-    # Retry registration to handle IP rate limiting
     until grep -q 'account' <<<"$ACCOUNT"; do
       [ "$ACCOUNT" = 'error code: 1015' ] && sleep 10
-      ACCOUNT=$(curl --request POST 'https://api.cloudflareclient.com/v0a2158/reg' \
+      ACCOUNT=$(req --request POST 'https://api.cloudflareclient.com/v0a2158/reg' \
         --silent \
         --location \
         --tlsv1.3 \
@@ -310,7 +424,19 @@ register_account() {
       RESERVED=$(echo "$CLIENT_ID" | base64 -d | xxd -p | fold -w2 | while read HEX; do printf '%d ' "0x${HEX}"; done | awk '{print "["$1", "$2", "$3"]"}')
     fi
 
-    ACCOUNT=$(python3 -m json.tool <<<"$ACCOUNT" 2>&1 | sed "/\"key\"/a\    \"private_key\": \"$PRIVATE_KEY\"," | sed "/\"client_id\"/a\        \"reserved\": $RESERVED,")
+    # 1. 压平网络响应，保证处理的是单行紧凑 JSON
+    ACCOUNT=$(tr -d '\r\n' <<<"$ACCOUNT")
+
+    # 2. 插入 private_key（以 | 分隔防 Base64 斜杠冲突）
+    ACCOUNT=$(sed "s|\"key\":\"[^\"]*\"|&,\"private_key\":\"$PRIVATE_KEY\"|" <<<"$ACCOUNT")
+
+    # 3. 若接口无 reserved 则插入 reserved
+    if ! grep -q '"reserved"' <<<"$ACCOUNT"; then
+      ACCOUNT=$(sed "s|\"client_id\":\"[^\"]*\"|&,\"reserved\":$RESERVED|" <<<"$ACCOUNT")
+    fi
+
+    # 4. 统一使用 json_pretty 美化并输出
+    ACCOUNT=$(echo "$ACCOUNT" | json_pretty 2>&1)
   fi
 
   grep -q 'error' <<<"$ACCOUNT" && echo " Failed to register an account. " && exit 1
@@ -330,49 +456,49 @@ device_information() {
   [ "$#" = 2 ] && local ID="$1" && local TOKEN="$2"
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  curl --request GET "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
+  req --request GET "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
     --silent \
     --location \
     --header 'User-Agent: okhttp/3.12.1' \
     --header 'CF-Client-Version: a-6.10-2158' \
     --header 'Content-Type: application/json' \
     --header "Authorization: Bearer ${TOKEN}" |
-    python3 -m json.tool | sed "/\"warp_enabled\"/i\    \"token\": \"${TOKEN}\","
+    json_pretty | sed "/\"warp_enabled\"/i\    \"token\": \"${TOKEN}\","
 }
 
 # Get app information
 app_information() {
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  curl --request GET "https://api.cloudflareclient.com/v0a2158/client_config" \
+  req --request GET "https://api.cloudflareclient.com/v0a2158/client_config" \
     --silent \
     --location \
     --header 'User-Agent: okhttp/3.12.1' \
     --header 'CF-Client-Version: a-6.10-2158' \
     --header 'Content-Type: application/json' \
     --header "Authorization: Bearer ${TOKEN}" |
-    python3 -m json.tool
+    json_pretty
 }
 
 # List bound devices
 account_binding_devices() {
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  curl --request GET "https://api.cloudflareclient.com/v0a2158/reg/${ID}/account/devices" \
+  req --request GET "https://api.cloudflareclient.com/v0a2158/reg/${ID}/account/devices" \
     --silent \
     --location \
     --header 'User-Agent: okhttp/3.12.1' \
     --header 'CF-Client-Version: a-6.10-2158' \
     --header 'Content-Type: application/json' \
     --header "Authorization: Bearer ${TOKEN}" |
-    python3 -m json.tool
+    json_pretty
 }
 
 # Change device name
 change_device_name() {
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  curl --request PATCH "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
+  req --request PATCH "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
     --silent \
     --location \
     --header 'User-Agent: okhttp/3.12.1' \
@@ -380,7 +506,7 @@ change_device_name() {
     --header 'Content-Type: application/json' \
     --header "Authorization: Bearer ${TOKEN}" \
     --data '{"name":"'$DEVICE_NAME'"}' |
-    python3 -m json.tool
+    json_pretty
 }
 
 # Change license
@@ -388,7 +514,7 @@ change_license() {
   [ "$#" = 3 ] && local ID="$1" && local TOKEN="$2" && local LICENSE="$3"
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  curl --request PUT "https://api.cloudflareclient.com/v0a2158/reg/${ID}/account" \
+  req --request PUT "https://api.cloudflareclient.com/v0a2158/reg/${ID}/account" \
     --silent \
     --location \
     --header 'User-Agent: okhttp/3.12.1' \
@@ -396,14 +522,14 @@ change_license() {
     --header 'Content-Type: application/json' \
     --header "Authorization: Bearer ${TOKEN}" \
     --data '{"license": "'$LICENSE'"}' |
-    python3 -m json.tool
+    json_pretty
 }
 
 # Unbind device
 unbind_devide() {
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  curl --request PATCH "https://api.cloudflareclient.com/v0a2158/reg/${ID}/account/reg/${ID}" \
+  req --request PATCH "https://api.cloudflareclient.com/v0a2158/reg/${ID}/account/reg/${ID}" \
     --silent \
     --location \
     --header 'User-Agent: okhttp/3.12.1' \
@@ -411,7 +537,7 @@ unbind_devide() {
     --header 'Content-Type: application/json' \
     --header "Authorization: Bearer ${TOKEN}" \
     --data '{"active":false}' |
-    python3 -m json.tool
+    json_pretty
 }
 
 # Cancel account
@@ -419,7 +545,7 @@ cancle_account() {
   [ "$#" = 2 ] && local ID="$1" && local TOKEN="$2"
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  local RESULT=$(curl --request DELETE "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
+  local RESULT=$(req --request DELETE "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
     --head \
     --silent \
     --location \
@@ -458,14 +584,14 @@ get_token() {
     else
       read -rp "Please re-enter the organization: " ORGANIZATION
     fi
-    DATA_1=$(curl -I -s "https://${ORGANIZATION}.cloudflareaccess.com/warp" | grep -E '^HTTP/2|^location|CF_AppSession=' | sed 's/\r//g')
+    DATA_1=$(req -I -s "https://${ORGANIZATION}.cloudflareaccess.com/warp" | grep -E '^HTTP/2|^location|CF_AppSession=' | sed 's/\r//g')
   done
 
   KID=$(echo "$DATA_1" | sed -n '/^location/ s/.*?kid=//p')
 
   CF_APPSESSION=$(echo "$DATA_1" | awk -F '[=;]' '/CF_AppSession=/{print $2}')
 
-  CF_SESSION=$(curl "https://${ORGANIZATION}.cloudflareaccess.com/cdn-cgi/access/login/${ORGANIZATION}.cloudflareaccess.com?kid=${KID}" \
+  CF_SESSION=$(req "https://${ORGANIZATION}.cloudflareaccess.com/cdn-cgi/access/login/${ORGANIZATION}.cloudflareaccess.com?kid=${KID}" \
     --head \
     --silent \
     -H 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7' \
@@ -485,7 +611,7 @@ get_token() {
     -H 'user-agent: okhttp/3.12.1' |
     awk -F '[=;]' '/CF_Session=/{print $2}' | sed 's/\r//g')
 
-  NONCE=$(curl "https://${ORGANIZATION}.cloudflareaccess.com/cdn-cgi/access/verify-code/${ORGANIZATION}.cloudflareaccess.com?kid=${KID}" \
+  NONCE=$(req "https://${ORGANIZATION}.cloudflareaccess.com/cdn-cgi/access/verify-code/${ORGANIZATION}.cloudflareaccess.com?kid=${KID}" \
     --include \
     --silent \
     -H 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7' \
@@ -519,7 +645,7 @@ get_token() {
       read -rp "Please re-enter the verification code and press [r] to resend the email: " CODE
     fi
     if [[ "$CODE" =~ ^[0-9]{6}$ ]]; then
-      DATA_2=$(curl "https://${ORGANIZATION}.cloudflareaccess.com/cdn-cgi/access/callback" \
+      DATA_2=$(req "https://${ORGANIZATION}.cloudflareaccess.com/cdn-cgi/access/callback" \
         --include \
         --silent \
         -H 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7' \
@@ -543,7 +669,7 @@ get_token() {
         --data-raw "code=${CODE}&nonce=${NONCE}" | grep -E '^location.*authorized|CF_Authorization=|CF_Device=' | sed 's/\r//g')
     elif [[ "$CODE" =~ ^[Rr] ]]; then
       unset CODE DATA_2
-      curl "https://${ORGANIZATION}.cloudflareaccess.com/cdn-cgi/access/resend-code?nonce=${NONCE}" \
+      req "https://${ORGANIZATION}.cloudflareaccess.com/cdn-cgi/access/resend-code?nonce=${NONCE}" \
         --include \
         --silent \
         -H 'accept: */*' \
@@ -565,7 +691,7 @@ get_token() {
   CF_AUTHORIZATION=$(echo "$DATA_2" | awk -F '[=;]' '/CF_Authorization=/{print $2}')
   CF_DEVICE=$(echo "$DATA_2" | awk -F '[=;]' '/CF_Device=/{print $2}')
 
-  TEAM_TOKEN=$(curl -i -s "https://${ORGANIZATION}.cloudflareaccess.com/warp" \
+  TEAM_TOKEN=$(req -i -s "https://${ORGANIZATION}.cloudflareaccess.com/warp" \
     -H 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7' \
     -H 'accept-language: zh-CN,zh;q=0.9' \
     -H 'cache-control: no-cache' \
@@ -711,4 +837,3 @@ fi
 
 # Execute based on parameters
 $RUN
-
