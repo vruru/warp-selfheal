@@ -40,9 +40,9 @@ req() {
   fi
 
   # wget fallback: translate the curl options used in this script into wget
-  local url="" method="" post_data="" timeout="" o
-  local merge_stderr=0 spider=0
-  local -a w=( -q --no-check-certificate )
+  url= method= post_data= timeout= o=
+  merge_stderr=0 spider=0
+  w=( -q --no-check-certificate )
 
   while [[ $# -gt 0 ]]; do
     o="$1"
@@ -178,7 +178,7 @@ generate_device_ids() {
 
 # ====== MASQUE Process API Response ======
 process_registration_response() {
-  local response=$1
+  response=$1
 
   # Extract JSON fields
   ID=$(echo "$response" | awk -F '"' '/"id":/{print $4; exit}')
@@ -216,7 +216,7 @@ EOF
 
 # ====== MASQUE Common logic ======
 update_and_save_config() {
-  local base_response=$1
+  base_response=$1
 
   ID=$(echo "$base_response" | sed -E 's/.*"id":\s*"([^"]*)".*/\1/')
   ACCESS_TOKEN=$(echo "$base_response" | sed -E 's/.*"(token|access_token)":\s*"([^"]*)".*/\2/')
@@ -272,8 +272,9 @@ update_and_save_config() {
     echo "$RESPONSE" | json_pretty >&2; exit 1
   fi
 
-  # Insert access_token before warp_enabled
-  FORMATTED_RESPONSE=$(echo "$RESPONSE" | json_pretty | sed "/\"warp_enabled\".*/i\    \"token\": \"$ACCESS_TOKEN\",")
+  # Insert access_token before warp_enabled, then pretty-print
+  RESPONSE=$(sed "s|\"warp_enabled\":|\"token\":\"$ACCESS_TOKEN\",\"warp_enabled\":|" <<<"$RESPONSE")
+  FORMATTED_RESPONSE=$(echo "$RESPONSE" | json_pretty)
 
   # Save to file if REGISTER_PATH is set
   if [ -n "$REGISTER_PATH" ]; then
@@ -366,14 +367,14 @@ fetch_account_information() {
     fi
   else
     read -rp " Input device id: " ID
-    local i=5
+    i=5
     until [[ "$ID" =~ ^(t\.)?[A-F0-9a-f]{8}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{12}$ ]]; do
       ((i--)) || true
       [ "$i" = 0 ] && echo " Input errors up to 5 times. The script is aborted. " && exit 1 || read -rp " Device id should be 36 or 38 characters, please re-enter (${i} times remaining): " ID
     done
 
     read -rp " Input api token: " TOKEN
-    local i=5
+    i=5
     until [[ "$TOKEN" =~ ^[A-F0-9a-f]{8}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{12}$ ]]; do
       ((i--)) || true
       [ "$i" = 0 ] && echo " Input errors up to 5 times. The script is aborted. " && exit 1 || read -rp " Api token should be 36 characters, please re-enter (${i} times remaining): " TOKEN
@@ -418,25 +419,23 @@ register_account() {
     done
 
     CLIENT_ID=$(sed 's/.*"client_id":"\([^\"]\+\)\".*/\1/' <<<"$ACCOUNT")
-    if [ -x "$(type -p od)" ]; then
-      RESERVED=$(echo "$CLIENT_ID" | base64 -d | od -An -tu1 | awk '{print "["$1", "$2", "$3"]"}')
-    else
-      RESERVED=$(echo "$CLIENT_ID" | base64 -d | xxd -p | fold -w2 | while read HEX; do printf '%d ' "0x${HEX}"; done | awk '{print "["$1", "$2", "$3"]"}')
-    fi
+    RESERVED=$(printf '[%s]' "$(printf '%s' "$CLIENT_ID" | base64 -d | while LC_ALL=C read -rn1 c; do printf "%d, " "'$c"; done | sed 's/, $//')")
 
-    # 1. 压平网络响应，保证处理的是单行紧凑 JSON
+    # 1. Flatten the network response to a single-line compact JSON
     ACCOUNT=$(tr -d '\r\n' <<<"$ACCOUNT")
 
-    # 2. 插入 private_key（以 | 分隔防 Base64 斜杠冲突）
-    ACCOUNT=$(sed "s|\"key\":\"[^\"]*\"|&,\"private_key\":\"$PRIVATE_KEY\"|" <<<"$ACCOUNT")
-
-    # 3. 若接口无 reserved 则插入 reserved
-    if ! grep -q '"reserved"' <<<"$ACCOUNT"; then
-      ACCOUNT=$(sed "s|\"client_id\":\"[^\"]*\"|&,\"reserved\":$RESERVED|" <<<"$ACCOUNT")
+    # 2. Insert private_key in one pass; also add reserved if the API omits it
+    if grep -q '"reserved"' <<<"$ACCOUNT"; then
+      ACCOUNT=$(sed "s|\"key\":\"[^\"]*\"|&,\"private_key\":\"$PRIVATE_KEY\"|" <<<"$ACCOUNT")
+    else
+      ACCOUNT=$(sed -E \
+        -e "s|\"key\":\"[^\"]*\"|&,\"private_key\":\"$PRIVATE_KEY\"|" \
+        -e "s|\"client_id\":\"[^\"]*\"|&,\"reserved\":$RESERVED|" \
+        <<<"$ACCOUNT")
     fi
 
-    # 4. 统一使用 json_pretty 美化并输出
-    ACCOUNT=$(echo "$ACCOUNT" | json_pretty 2>&1)
+    # 3. Pretty-print with json_pretty and output
+    ACCOUNT=$(json_pretty 2>&1 <<<"$ACCOUNT")
   fi
 
   grep -q 'error' <<<"$ACCOUNT" && echo " Failed to register an account. " && exit 1
@@ -453,17 +452,27 @@ register_account() {
 
 # Get device information
 device_information() {
-  [ "$#" = 2 ] && local ID="$1" && local TOKEN="$2"
+  [ "$#" = 2 ] && ID="$1" && TOKEN="$2"
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  req --request GET "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
+  RESPONSE=$(req --request GET "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
     --silent \
     --location \
     --header 'User-Agent: okhttp/3.12.1' \
     --header 'CF-Client-Version: a-6.10-2158' \
     --header 'Content-Type: application/json' \
-    --header "Authorization: Bearer ${TOKEN}" |
-    json_pretty | sed "/\"warp_enabled\"/i\    \"token\": \"${TOKEN}\","
+    --header "Authorization: Bearer ${TOKEN}")
+
+  # 1. Extract client_id and compute reserved
+  CLIENT_ID=$(sed 's/.*"client_id":"\([^\"]\+\)\".*/\1/' <<<"$RESPONSE")
+  RESERVED=$(printf '[%s]' "$(printf '%s' "$CLIENT_ID" | base64 -d | while LC_ALL=C read -rn1 c; do printf "%d, " "'$c"; done | sed 's/, $//')")
+
+  # 2. Insert reserved and token on the compact JSON in one pass, then pretty-print
+  RESPONSE=$(sed -E \
+    -e "s|\"client_id\":\"[^\"]*\"|&,\"reserved\":$RESERVED|" \
+    -e "s|\"warp_enabled\":|\"token\":\"$TOKEN\",\"warp_enabled\":|" \
+    <<<"$RESPONSE")
+  echo "$RESPONSE" | json_pretty
 }
 
 # Get app information
@@ -511,7 +520,7 @@ change_device_name() {
 
 # Change license
 change_license() {
-  [ "$#" = 3 ] && local ID="$1" && local TOKEN="$2" && local LICENSE="$3"
+  [ "$#" = 3 ] && ID="$1" && TOKEN="$2" && LICENSE="$3"
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
   req --request PUT "https://api.cloudflareclient.com/v0a2158/reg/${ID}/account" \
@@ -542,10 +551,10 @@ unbind_devide() {
 
 # Cancel account
 cancle_account() {
-  [ "$#" = 2 ] && local ID="$1" && local TOKEN="$2"
+  [ "$#" = 2 ] && ID="$1" && TOKEN="$2"
   [[ -z "$ID" && -z "$TOKEN" ]] && fetch_account_information
 
-  local RESULT=$(req --request DELETE "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
+  RESULT=$(req --request DELETE "https://api.cloudflareclient.com/v0a2158/reg/${ID}" \
     --head \
     --silent \
     --location \
@@ -564,11 +573,8 @@ decode_reserved() {
     fetch_client_id=$(device_information)
     CLIENT_ID=$(expr " $fetch_client_id" | awk -F'"' '/client_id/{print $4}')
   }
-  if [ -x "$(type -p od)" ]; then
-    RESERVED=$(echo "$CLIENT_ID" | base64 -d | od -An -tu1 | awk '{print "["$1", "$2", "$3"]"}')
-  else
-    RESERVED=$(echo "$CLIENT_ID" | base64 -d | xxd -p | fold -w2 | while read HEX; do printf '%d ' "0x${HEX}"; done | awk '{print "["$1", "$2", "$3"]"}')
-  fi
+  RESERVED=$(printf '[%s]' "$(printf '%s' "$CLIENT_ID" | base64 -d | while LC_ALL=C read -rn1 c; do printf "%d, " "'$c"; done | sed 's/, $//')")
+
   echo -e "client id: $CLIENT_ID\nreserved : $RESERVED"
 }
 

@@ -414,7 +414,7 @@ warp_api(){
 
   case "$RUN" in
     register )
-      local ACCOUNT=$(curl --retry 500 --retry-delay 1 --max-time 2 --silent --location --fail "https://warp.cloudflare.nyc.mn/?run=register")
+      local ACCOUNT=$(bash <(curl -sSL --connect-timeout 5 --max-time 5 --retry 0 "https://gitlab.com/fscarmen/warp/-/raw/main/api.sh") --register)
       grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT"
       ;;
     cancel )
@@ -1138,31 +1138,36 @@ EOF
   MTU=$(cat /tmp/warp-go-mtu) && rm -f /tmp/warp-go-mtu
 
   # 按 CONF 编码（前缀 0*=IPv6 / 10*=IPv4 / 11*=双栈）选择 Endpoint 与 PostUp/PostDown 规则，172.17.0.0/24 为 Docker 网段固定追加
-  local ENDPOINT RULES
+  local ENDPOINT RULES DOCKER_RULES
+  DOCKER_RULES="PostUp = ip -4 rule add from 172.17.0.0/16 lookup main
+PostDown = ip -4 rule delete from 172.17.0.0/16 lookup main
+PostUp = ip -4 rule add from 172.18.0.0/15 lookup main
+PostDown = ip -4 rule delete from 172.18.0.0/15 lookup main
+PostUp = ip -4 rule add from 172.20.0.0/14 lookup main
+PostDown = ip -4 rule delete from 172.20.0.0/14 lookup main
+PostUp = ip -4 rule add from 172.24.0.0/13 lookup main
+PostDown = ip -4 rule delete from 172.24.0.0/13 lookup main
+PostUp = ip -4 rule add from 192.168.0.0/16 lookup main
+PostDown = ip -4 rule delete from 192.168.0.0/16 lookup main
+"
   case "$CONF" in
     0*)
       ENDPOINT='[2606:4700:d0::a29f:c001]:2408'
       RULES="PostUp = ip -6 rule add from $LAN6 lookup main
 PostDown = ip -6 rule delete from $LAN6 lookup main
-PostUp = ip -4 rule add from 172.17.0.0/24 lookup main
-PostDown = ip -4 rule delete from 172.17.0.0/24 lookup main
-" ;;
+${DOCKER_RULES}" ;;
     10*)
       ENDPOINT='162.159.192.1:2408'
       RULES="PostUp = ip -4 rule add from $LAN4 lookup main
 PostDown = ip -4 rule delete from $LAN4 lookup main
-PostUp = ip -4 rule add from 172.17.0.0/24 lookup main
-PostDown = ip -4 rule delete from 172.17.0.0/24 lookup main
-" ;;
+${DOCKER_RULES}" ;;
     11*)
       ENDPOINT='engage.cloudflareclient.com:2408'
       RULES="PostUp = ip -4 rule add from $LAN4 lookup main
 PostUp = ip -6 rule add from $LAN6 lookup main
 PostDown = ip -4 rule delete from $LAN4 lookup main
 PostDown = ip -6 rule delete from $LAN6 lookup main
-PostUp = ip -4 rule add from 172.17.0.0/24 lookup main
-PostDown = ip -4 rule delete from 172.17.0.0/24 lookup main
-" ;;
+${DOCKER_RULES}" ;;
   esac
 
   # AllowedIPs（后缀 4=仅 IPv4 / 6=仅 IPv6 / D=双栈）
