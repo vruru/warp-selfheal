@@ -981,29 +981,52 @@ export_file() {
   if [ -s /opt/warp-go/warp-go ]; then
     [ ! -s /opt/warp-go/warp.conf ] && register_api warp.conf
     /opt/warp-go/warp-go --config=/opt/warp-go/warp.conf --export-wireguard=/opt/warp-go/wgcf.conf >/dev/null 2>&1
-    /opt/warp-go/warp-go --config=/opt/warp-go/warp.conf --export-singbox=/opt/warp-go/singbox.json >/dev/null 2>&1
+    /opt/warp-go/warp-go --config=/opt/warp-go/warp.conf --export-singbox=/tmp/singbox.json >/dev/null 2>&1
+    if [ -s /tmp/singbox.json ]; then
+      local SING_BOX_TEMP=$(< /tmp/singbox.json)
+      cat > /opt/warp-go/singbox.json << EOF
+{
+  "endpoints": [
+    {
+      "type": "wireguard",
+      "tag": "warp-ep",
+      "mtu": 1280,
+      "address": [
+        "$(sed -n 's/.*"local_address":[[:space:]]*\[[[:space:]]*"\([^"]*\)".*/\1/p' <<< "$SING_BOX_TEMP")",
+        "$(sed -n 's/.*"local_address":[[:space:]]*\["[^"]*",[*[:space:]]*"\([^"]*\)".*/\1/p' <<< "$SING_BOX_TEMP")"
+      ],
+      "private_key": "$(sed -n 's/.*"private_key":[[:space:]]*"\([^"]*\)".*/\1/p' <<< "$SING_BOX_TEMP")",
+      "peers": [
+        {
+          "address": "$(sed -n 's/.*"server":[[:space:]]*"\([^"]*\)".*/\1/p' <<< "$SING_BOX_TEMP")",
+          "port": 2408,
+          "public_key": "$(sed -n 's/.*"peer_public_key":[[:space:]]*"\([^"]*\)".*/\1/p' <<< "$SING_BOX_TEMP")",
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ],
+          "reserved": [
+            $(sed -n 's/.*"reserved":[[:space:]]*\[[[:space:]]*[0-9]\+[[:space:]]*,[[:space:]]*[0-9]\+[[:space:]]*,[[:space:]]*\([0-9]\+\).*/\1/p' <<< "$SING_BOX_TEMP"),
+            $(sed -n 's/.*"reserved":[[:space:]]*\[[[:space:]]*[0-9]\+[[:space:]]*,[[:space:]]*\([0-9]\+\).*/\1/p' <<< "$SING_BOX_TEMP"),
+            $(sed -n 's/.*"reserved":[[:space:]]*\[[[:space:]]*[0-9]\+[[:space:]]*,[[:space:]]*[0-9]\+[[:space:]]*,[[:space:]]*\([0-9]\+\).*/\1/p' <<< "$SING_BOX_TEMP")
+          ]
+        }
+      ]
+    }
+  ]
+}
+EOF
+      rm -f /tmp/singbox.json
+    fi
   else
     error " $(text 51) "
   fi
 
   info "\n $(text 52) "
   cat /opt/warp-go/wgcf.conf
-  echo -e "\n\n"
 
-  # 检查 JSON 格式化工具
-  if [ -x "$(type -p python3)" ]; then
-    local JSON_TOOL="| python3 -m json.tool"
-  elif [ -x "$(type -p python)" ]; then
-    local JSON_TOOL="| python -m json.tool"
-  elif [ -x "$(type -p json_pp)" ]; then
-    local JSON_TOOL="| json_pp"
-  elif [ -x "$(type -p jq)" ]; then
-    local JSON_TOOL="| jq"
-  fi
-
-  info " $(text 54) "
-  eval "cat /opt/warp-go/singbox.json $JSON_TOOL"
-  echo -e "\n\n"
+  info "\n\n $(text 54) "
+  cat /opt/warp-go/singbox.json
 }
 
 # warp-go 安装
