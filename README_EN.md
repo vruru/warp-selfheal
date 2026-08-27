@@ -4,6 +4,20 @@ English | [中文](README.md)
 
 * * *
 
+> This repository is a GPLv3 derivative of [fscarmen/warp](https://gitlab.com/fscarmen/warp), modified by `vruru` on 2026-08-28. The main change is persistent WireProxy SOCKS data-plane health checking with automatic recovery, integrated with installation, the `warp y` switch, self-update, and uninstall. The original copyright notices and GPLv3 license are preserved.
+
+Install or upgrade the self-healing edition:
+
+```bash
+wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && bash menu.sh
+```
+
+The watchdog is installed automatically with WireProxy. Running the command once also upgrades an existing WireProxy installation.
+
+This repository retains the complete upstream history and the runtime files used by installation, including `api.sh`, WireProxy, wireguard-go, wgcf, warp-go, and endpoint assets. Runtime fetches and self-updates now point to this repository. Dependencies previously fetched from separate original projects (`warp_unlock` and `resolvconf`) are mirrored with their licenses under [`vendor/`](vendor/README.md). The legacy Docker mode now builds its image locally from the repository's Dockerfile instead of pulling the original author's image. The mirrored installation paths therefore remain available if the original repository disappears; Cloudflare APIs, OS package repositories, and independent third-party services still require network access.
+
+* * *
+
 # Table of Contents
 
 - [Update Information](README_EN.md#update-information)
@@ -22,7 +36,9 @@ English | [中文](README.md)
 * * *
 
 ## Update Information
-2026.08.08 menu.sh v3.2.7 1. Optimize IPv6 routing rules — cover the whole /64 subnet; 2. Add built-in auto keepalive — periodically check the WARP interface and auto re-register a new IP when it drops, preventing network loss\n Upgrade existing install: bash <(curl -sSL https://raw.githubusercontent.com/fscarmen/tools/main/keepalive-upgrade.sh)
+2026.08.28 menu.sh v3.2.7-selfheal.2 Add WireProxy SOCKS data-plane self-healing and mirror the original project's runtime files in this repository: periodically require `warp=on/plus`, restart WireProxy after consecutive failures, support systemd timers and Alpine cron, and integrate cleanly with manual switching, self-update, and uninstall.
+
+2026.08.08 menu.sh v3.2.7 1. Optimize IPv6 routing rules — cover the whole /64 subnet; 2. Add built-in auto keepalive — periodically check the WARP interface and auto re-register a new IP when it drops, preventing network loss
 
 2026.07.06 menu.sh v3.2.6 Resolve route conflict with WARP interface IP by narrowing CIDR range
 
@@ -102,7 +118,7 @@ English | [中文](README.md)
 >Thanks to badafans open source project and patient guidance. Now released in linux using the Cloudflare WARP API. [badafans open source project](https://github.com/badafans/warp-reg)
 >Usage method
 >```
->wget -N https://gitlab.com/fscarmen/warp/-/raw/main/api.sh && bash api.sh [option]
+>wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/api.sh && bash api.sh [option]
 >```
 >
 >2023.5.10 warp-go V1.1.4 1. Docking the warp-go official account pool api, wiki: https://docs.zeroteam.top/apis/warp; 2. Change non-global from ipv4 only to dualstacks; 3. Fix the bug that the native IPv6 cannot login when using dualstacks; 4. Update the Best-enpoint app; 5. Change ip api;
@@ -150,7 +166,7 @@ English | [中文](README.md)
 >2022.8.13 First on the whole web, proudly presents @CoiaPrant's warp-go one-click script. Using various interfaces of CloudFlare-WARP and integrating wireguard-go, it can completely replace WGCF. Save Hong Kong, Toronto, etc., and let VPS without official WARP also get WARP IP. Thanks @CoiaPrant and his team again. Project official address: https://gitlab.com/ProjectWARP/warp-go/-/tree/master/
 >
 >```
->wget -N https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh && bash warp-go.sh [option] [lisence]
+>wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/warp-go.sh && bash warp-go.sh [option] [lisence]
 >```
 >
 >2022.8.5 2.41 1.Get the traffic quota of WARP+ via API. Thanks to Oreo for technical support;
@@ -186,7 +202,7 @@ English | [中文](README.md)
 >2022.1.25  Media unlock daemon.  Check it every 5 minutes. If unlocked, the scheduled task exits immediately. If it is not unlocked, it will be swiped successfully in the background. Advantages: Minimized use of system resources. Please support professional unlock one-click script: https://github.com/fscarmen/unlock_warp
 >
 >```
->bash <(curl -sSL https://raw.githubusercontent.com/fscarmen/unlock_warp/main/unlock.sh)
+>bash <(curl -sSL https://raw.githubusercontent.com/vruru/warp-selfheal/main/vendor/warp_unlock/unlock.sh)
 >```
 >
 >2022.1.21  2.30: 1.All support WARP single-stack and dual-stack solutions. Switch to each other easily and quickly. Such as [warp s 4],[warp s 6],[warp s d]; 2.Brush Netflix Unlock IP with the expect area. Such as [warp i hk]. You can use it with crontab,screen,nohup & etc. [Detail](README_EN.md#how-to-brush-netflix-unlock-warp-ip); 3.Fixed stuck when brushing Netflix IP
@@ -199,7 +215,7 @@ English | [中文](README.md)
 >2022.1.6  Major technical breakthrough. Successfully separate the WGCF configuration file from the environment dependencies. With the idea of everything can be Docker, using the ultra-lightweight Alpine as the base package (base package 5M + dependencies 22M = 27MB), the configuration is placed in the mapped directory to solve the problem that some old systems cannot use the WARP service.
 >
 >```
->wget -N https://cdn.jsdelivr.net/gh/fscarmen/warp/docker.sh && bash docker.sh [option] [lisence] ## Install docker, pull images and install containers
+>wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/docker.sh && bash docker.sh [option] [lisence] ## Install docker, pull images and install containers
 >
 >docker exec -it wgcf sh #Some systems cannot run docker exec -it wgcf wg-quick up wgcf outside the container, you must execute it separately. Enter the container
 >
@@ -275,7 +291,7 @@ English | [中文](README.md)
 
 First run
 ```
-wget -N https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh && bash menu.sh [option] [lisence/url/token]
+wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && bash menu.sh [option] [lisence/url/token]
 ```
 Run again
 ```
@@ -309,7 +325,7 @@ warp [option] [lisence]
 
 Example: To add Warp dual stack to Oracle IPv4 for the first time
 ```
-wget -N https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh && bash menu.sh d
+wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && bash menu.sh d
 ```
 Brush Japanese Netflix
 ```
@@ -319,7 +335,7 @@ warp i jp
 ## WARP-GO Script Usage
 First run
 ```
-wget -N https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh && bash warp-go.sh [option] [lisence]
+wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/warp-go.sh && bash warp-go.sh [option] [lisence]
 ```
 Run again
 ```bash
@@ -358,7 +374,7 @@ warp-go [option] [lisence]
 
 ### Shell-API Script Usage
 ```
-wget -N https://gitlab.com/fscarmen/warp/-/raw/main/api.sh && bash api.sh [option]
+wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/api.sh && bash api.sh [option]
 ```
   | [option] Variable  | Specific action description |
   | ------------- | ------------- |

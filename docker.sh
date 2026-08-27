@@ -43,30 +43,30 @@ T[E0]="\n Language:\n  1.English (default) \n  2.简体中文\n"
 T[C0]="${T[E0]}"
 T[E1]="wgcf on docker"
 T[C1]="docker 的 wgcf 为宿主机服务"
-T[E2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp/issues]"
-T[E3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C3]="没有加载 TUN 模块，请在管理后台开启或联系供应商了解如何开启，问题反馈:[https://github.com/fscarmen/warp/issues]"
-T[E4]="The WARP server cannot be connected. It may be a China Mainland VPS. You can manually ping 162.159.192.1 or ping6 2606:4700:d0::a29f:c001.You can run the script again if the connect is successful. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C4]="与 WARP 的服务器不能连接,可能是大陆 VPS，可手动 ping 162.159.192.1 或 ping6 2606:4700:d0::a29f:c001，如能连通可再次运行脚本，问题反馈:[https://github.com/fscarmen/warp/issues]"
-T[E5]="The script supports Debian, Ubuntu, CentOS or Alpine systems only. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C5]="本脚本只支持 Debian、Ubuntu、CentOS 或 Alpine 系统,问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+T[E3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C3]="没有加载 TUN 模块，请在管理后台开启或联系供应商了解如何开启，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+T[E4]="The WARP server cannot be connected. It may be a China Mainland VPS. You can manually ping 162.159.192.1 or ping6 2606:4700:d0::a29f:c001.You can run the script again if the connect is successful. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C4]="与 WARP 的服务器不能连接,可能是大陆 VPS，可手动 ping 162.159.192.1 或 ping6 2606:4700:d0::a29f:c001，如能连通可再次运行脚本，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+T[E5]="The script supports Debian, Ubuntu, CentOS or Alpine systems only. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C5]="本脚本只支持 Debian、Ubuntu、CentOS 或 Alpine 系统,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E6]="warp h (help)\n warp o (Turn off WARP temporarily)\n warp u (Turn off and uninstall WARP docker)\n warp d (Upgrade to WARP+ account)\n warp d N5670ljg-sS9jD334-6o6g4M9F (Upgrade to WARP+ account with the license)\n warp d http://gist.github.com/teams.xml (Upgrade to Teams account with the URL)\n warp v (Sync the latest version)\n warp 1 (Add WARP IPv6 interface to native IPv4 VPS or WARP IPv4 interface to native IPv6 VPS)\n warp 1 N5670ljg-sS9jD334-6o6g4M9F Goodluck (Add IPv4 or IPV6 WARP+ interface with the license and named Goodluck)\n"
 T[C6]="warp h (帮助菜单）\n warp o (临时warp开关)\n warp u (卸载 WARP 网络接口和 Socks5 Client)\n warp d (免费 WARP 账户升级 WARP+)\n warp d N5670ljg-sS9jD334-6o6g4M9F (指定 License 升级 WARP+)\n warp d http://gist.github.com/teams.xml (指定 URL 升级 Teams)\n warp v (同步脚本至最新版本)\n warp 1 (Warp单栈)\n warp 1 N5670ljg-sS9jD334-6o6g4M9F Goodluck (指定 WARP+ License Warp 单栈，设备名为 Goodluck)\n"
 T[E7]="Installing curl..."
 T[C7]="安装curl中……"
 T[E8]="It is necessary to upgrade the latest package library before install curl.It will take a little time,please be patiently..."
 T[C8]="先升级软件库才能继续安装 curl，时间较长，请耐心等待……"
-T[E9]="Failed to install curl. The script is aborted. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C9]="安装 curl 失败，脚本中止，问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E9]="Failed to install curl. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C9]="安装 curl 失败，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E10]="WireGuard tools are not installed or the configuration file wgcf.conf cannot be found, please reinstall."
 T[C10]="没有安装 WireGuard tools 或者找不到配置文件 wgcf.conf，请重新安装。"
 T[E11]="Maximum \$j attempts to get WARP IP..."
 T[C11]="后台获取 WARP IP 中,最大尝试\$j次……"
 T[E12]="Try \$i"
 T[C12]="第\$i次尝试"
-T[E13]="There have been more than \$j failures. The script is aborted. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C13]="失败已超过\$j次，脚本中止，问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E13]="There have been more than \$j failures. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C13]="失败已超过\$j次，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E14]="Got the WARP IP successfully."
 T[C14]="已成功获取 WARP 网络"
 T[E15]="WARP is turned off. It could be turned on again by [warp o]"
@@ -87,8 +87,8 @@ T[E22]="Virtualization"
 T[C22]="虚拟化"
 T[E23]="Device name"
 T[C23]="设备名"
-T[E24]="Curren operating system is \$SYS.\\\n The system lower than \$SYSTEM \${MAJOR[int]} is not supported. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C24]="当前操作是 \$SYS\\\n 不支持 \$SYSTEM \${MAJOR[int]} 以下系统,问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E24]="Curren operating system is \$SYS.\\\n The system lower than \$SYSTEM \${MAJOR[int]} is not supported. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C24]="当前操作是 \$SYS\\\n 不支持 \$SYSTEM \${MAJOR[int]} 以下系统,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E25]="If there is a WARP+ License, please enter it, otherwise press Enter to continue:"
 T[C25]="如有 WARP+ License 请输入，没有可回车继续:"
 T[E26]="Input errors up to 5 times.The script is aborted."
@@ -117,8 +117,8 @@ T[E37]="Congratulations! WARP is turned on. Spend time:\$(( end - start )) secon
 T[C37]="恭喜！WARP 已开启，总耗时:\$(( end - start ))秒， 脚本当天运行次数:\$TODAY，累计运行次数：\$TOTAL"
 T[E38]="Turn on WGCF: [docker exec -it wgcf sh] and [wg-quick up wgcf; exit]. Turn off WGCF: [docker exec -it wgcf sh] and [wg-quick down wgcf; exit]"
 T[C38]="运行 WGCF: [docker exec -it wgcf sh], 然后 [wg-quick up wgcf; exit]; 关闭 WGCF:[docker exec -it wgcf sh], 然后 [wg-quick down wgcf; exit]"
-T[E39]="WARP installation failed. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C39]="WARP 安装失败，问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E39]="WARP installation failed. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C39]="WARP 安装失败，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E40]="WARP docker have been completely deleted!"
 T[C40]="WARP docker 已彻底删除!"
 T[E41]="Choose:"
@@ -139,8 +139,8 @@ T[E48]="WARP+ quota"
 T[C48]="剩余流量"
 T[E49]="Successfully synchronized the latest version"
 T[C49]="成功！已同步最新脚本，版本号"
-T[E50]="Upgrade failed. Feedback:[https://github.com/fscarmen/warp/issues]"
-T[C50]="升级失败，问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E50]="Upgrade failed. Feedback:[https://github.com/vruru/warp-selfheal/issues]"
+T[C50]="升级失败，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E51]="Add WARP IPv4 interface to IPv6 only VPS"
 T[C51]="为 IPv6 only 添加 IPv4 网络接口"
 T[E52]="Add WARP IPv6 interface to IPv4 only VPS"
@@ -201,8 +201,8 @@ T[E79]="\n Is there a WARP+ or Teams account?\n 1. WARP+\n 2. Teams\n 3. use fre
 T[C79]="\n 如有 WARP+ 或 Teams 账户请选择\n 1. WARP+\n 2. Teams\n 3. 使用免费账户 (默认)\n"
 T[E80]="Device name：\$(grep -s 'Device name' /etc/wireguard/info.log | awk '{ print \$NF }')\\\n Quota：\$(grep -s Quota /etc/wireguard/info.log | awk '{ print \$(NF-1), \$NF }')"
 T[C80]="设备名:\$(grep -s 'Device name' /etc/wireguard/info.log | awk '{ print \$NF }')\\\n 剩余流量:\$(grep -s Quota /etc/wireguard/info.log | awk '{ print \$(NF-1), \$NF }')"
-T[E81]="Curren architecture \$(arch) is not supported. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C81]="当前架构 \$(arch) 暂不支持,问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E81]="Curren architecture \$(arch) is not supported. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C81]="当前架构 \$(arch) 暂不支持,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E82]="( match √ )"
 T[C82]="( 符合 √ )"
 T[E83]="( mismatch X )"
@@ -304,7 +304,7 @@ uninstall() {
   docker inspect wgcf >/dev/null 2>&1 && docker rm -f wgcf
 
   # 删除镜像
-  local IMAGE_ID=$(docker images fscarmen/wgcf:$ARCHITECTURE --format "{{.ID}}")
+  local IMAGE_ID=$(docker images warp-selfheal-wgcf:$ARCHITECTURE --format "{{.ID}}")
   grep -q '.' <<< "$IMAGE_ID" && docker rmi -f $IMAGE_ID
 
   # 删除文件
@@ -320,7 +320,7 @@ uninstall() {
 
 # 同步脚本至最新版本
 ver() {
-  wget -N -P /etc/wireguard https://gitlab.com/fscarmen/warp/-/raw/main/docker.sh
+  wget -N -P /etc/wireguard https://raw.githubusercontent.com/vruru/warp-selfheal/main/docker.sh
   chmod +x /etc/wireguard/docker.sh
   ln -sf /etc/wireguard/docker.sh /usr/bin/warp
   green " ${T[${L}49]}:$(grep ^VERSION /etc/wireguard/docker.sh | sed "s/.*=//g")  ${T[${L}17]}：$(grep "T\[${L}1]" /etc/wireguard/docker.sh | cut -d \" -f2) " || red " ${T[${L}50]} "
@@ -435,7 +435,7 @@ input_license() {
 # 输入 Teams 账户 URL（如有）
 input_url() {
   [[ -z $URL ]] && reading " ${T[${L}74]} " URL
-  URL=${URL:-'https://gist.githubusercontent.com/fscarmen/56aaf02d743551737c9973b8be7a3496/raw/16cf34edf5fb28be00f53bb1c510e95a35491032/com.cloudflare.onedotonedotonedotone_preferences.xml'}
+  [[ -z $URL ]] && { red " A Teams configuration URL is required. "; return 1; }
   TEAMS=$(curl -sSL "$URL" | sed "s/\"/\&quot;/g")
   PRIVATEKEY=$(expr "$TEAMS" : '.*private_key&quot;>\([^<]*\).*')
   PUBLICKEY=$(expr "$TEAMS" : '.*public_key&quot;:&quot;\([^&]*\).*')
@@ -521,7 +521,13 @@ install() {
   {
     green " \n${T[${L}29]}\n " && ! systemctl is-active docker >/dev/null 2>&1 && curl -sSL get.docker.com | sh
 
-    docker run -dit --restart=always --network=host --name wgcf --device /dev/net/tun --privileged --cap-add net_admin --cap-add sys_module -v /etc/wireguard:/etc/wireguard -v /lib/modules:/lib/modules fscarmen/wgcf:"$ARCHITECTURE"
+    local WARP_DOCKER_IMAGE="warp-selfheal-wgcf:$ARCHITECTURE"
+    if ! docker image inspect "$WARP_DOCKER_IMAGE" >/dev/null 2>&1; then
+      curl -fsSL https://raw.githubusercontent.com/vruru/warp-selfheal/main/docker/wgcf/Dockerfile -o /tmp/warp-selfheal-wgcf.Dockerfile
+      docker build --pull -t "$WARP_DOCKER_IMAGE" -f /tmp/warp-selfheal-wgcf.Dockerfile /tmp
+      rm -f /tmp/warp-selfheal-wgcf.Dockerfile
+    fi
+    docker run -dit --restart=always --network=host --name wgcf --device /dev/net/tun --privileged --cap-add net_admin --cap-add sys_module -v /etc/wireguard:/etc/wireguard -v /lib/modules:/lib/modules "$WARP_DOCKER_IMAGE"
   } &
 
   # 注册 WARP 账户 (将生成 wgcf-account.toml 文件保存账户信息)
@@ -532,7 +538,7 @@ install() {
 
     # 安装 wgcf，尽量下载官方的最新版本，如官方 wgcf 下载不成功，将使用 jsDelivr ，以更好的支持双栈。并添加执行权限
     wget --no-check-certificate -T1 -t1 $CDN -O /usr/local/bin/wgcf https://github.com/ViRb3/wgcf/releases/download/v"$latest"/wgcf_"$latest"_linux_$ARCHITECTURE ||
-    wget --no-check-certificate $CDN -O /usr/local/bin/wgcf https://cdn.jsdelivr.net/gh/fscarmen/warp/wgcf_"$latest"_linux_$ARCHITECTURE
+    wget --no-check-certificate $CDN -O /usr/local/bin/wgcf https://raw.githubusercontent.com/vruru/warp-selfheal/main/wgcf/wgcf_2.2.29_linux_$ARCHITECTURE
     chmod +x /usr/local/bin/wgcf
 
     # 注册 WARP 账户 (将生成 wgcf-account.toml 文件保存账户信息)
@@ -673,7 +679,9 @@ case "$OPTION" in
     install;;
   d ) update;;
   * ) menu;;
-esac#!/bin/bash
+esac
+
+#!/bin/bash
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin:/sbin:/bin
 export LANG=en_US.UTF-8
 
@@ -718,30 +726,30 @@ T[E0]="\n Language:\n  1.English (default) \n  2.简体中文\n"
 T[C0]="${T[E0]}"
 T[E1]="wgcf on docker"
 T[C1]="docker 的 wgcf 为宿主机服务"
-T[E2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp/issues]"
-T[E3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C3]="没有加载 TUN 模块，请在管理后台开启或联系供应商了解如何开启，问题反馈:[https://github.com/fscarmen/warp/issues]"
-T[E4]="The WARP server cannot be connected. It may be a China Mainland VPS. You can manually ping 162.159.192.1 or ping6 2606:4700:d0::a29f:c001.You can run the script again if the connect is successful. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C4]="与 WARP 的服务器不能连接,可能是大陆 VPS，可手动 ping 162.159.192.1 或 ping6 2606:4700:d0::a29f:c001，如能连通可再次运行脚本，问题反馈:[https://github.com/fscarmen/warp/issues]"
-T[E5]="The script supports Debian, Ubuntu, CentOS or Alpine systems only. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C5]="本脚本只支持 Debian、Ubuntu、CentOS 或 Alpine 系统,问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+T[E3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C3]="没有加载 TUN 模块，请在管理后台开启或联系供应商了解如何开启，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+T[E4]="The WARP server cannot be connected. It may be a China Mainland VPS. You can manually ping 162.159.192.1 or ping6 2606:4700:d0::a29f:c001.You can run the script again if the connect is successful. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C4]="与 WARP 的服务器不能连接,可能是大陆 VPS，可手动 ping 162.159.192.1 或 ping6 2606:4700:d0::a29f:c001，如能连通可再次运行脚本，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+T[E5]="The script supports Debian, Ubuntu, CentOS or Alpine systems only. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C5]="本脚本只支持 Debian、Ubuntu、CentOS 或 Alpine 系统,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E6]="warp h (help)\n warp o (Turn off WARP temporarily)\n warp u (Turn off and uninstall WARP docker)\n warp d (Upgrade to WARP+ account)\n warp d N5670ljg-sS9jD334-6o6g4M9F (Upgrade to WARP+ account with the license)\n warp d http://gist.github.com/teams.xml (Upgrade to Teams account with the URL)\n warp v (Sync the latest version)\n warp 1 (Add WARP IPv6 interface to native IPv4 VPS or WARP IPv4 interface to native IPv6 VPS)\n warp 1 N5670ljg-sS9jD334-6o6g4M9F Goodluck (Add IPv4 or IPV6 WARP+ interface with the license and named Goodluck)\n"
 T[C6]="warp h (帮助菜单）\n warp o (临时warp开关)\n warp u (卸载 WARP 网络接口和 Socks5 Client)\n warp d (免费 WARP 账户升级 WARP+)\n warp d N5670ljg-sS9jD334-6o6g4M9F (指定 License 升级 WARP+)\n warp d http://gist.github.com/teams.xml (指定 URL 升级 Teams)\n warp v (同步脚本至最新版本)\n warp 1 (Warp单栈)\n warp 1 N5670ljg-sS9jD334-6o6g4M9F Goodluck (指定 WARP+ License Warp 单栈，设备名为 Goodluck)\n"
 T[E7]="Installing curl..."
 T[C7]="安装curl中……"
 T[E8]="It is necessary to upgrade the latest package library before install curl.It will take a little time,please be patiently..."
 T[C8]="先升级软件库才能继续安装 curl，时间较长，请耐心等待……"
-T[E9]="Failed to install curl. The script is aborted. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C9]="安装 curl 失败，脚本中止，问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E9]="Failed to install curl. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C9]="安装 curl 失败，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E10]="WireGuard tools are not installed or the configuration file wgcf.conf cannot be found, please reinstall."
 T[C10]="没有安装 WireGuard tools 或者找不到配置文件 wgcf.conf，请重新安装。"
 T[E11]="Maximum \$j attempts to get WARP IP..."
 T[C11]="后台获取 WARP IP 中,最大尝试\$j次……"
 T[E12]="Try \$i"
 T[C12]="第\$i次尝试"
-T[E13]="There have been more than \$j failures. The script is aborted. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C13]="失败已超过\$j次，脚本中止，问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E13]="There have been more than \$j failures. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C13]="失败已超过\$j次，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E14]="Got the WARP IP successfully."
 T[C14]="已成功获取 WARP 网络"
 T[E15]="WARP is turned off. It could be turned on again by [warp o]"
@@ -762,8 +770,8 @@ T[E22]="Virtualization"
 T[C22]="虚拟化"
 T[E23]="Device name"
 T[C23]="设备名"
-T[E24]="Curren operating system is \$SYS.\\\n The system lower than \$SYSTEM \${MAJOR[int]} is not supported. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C24]="当前操作是 \$SYS\\\n 不支持 \$SYSTEM \${MAJOR[int]} 以下系统,问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E24]="Curren operating system is \$SYS.\\\n The system lower than \$SYSTEM \${MAJOR[int]} is not supported. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C24]="当前操作是 \$SYS\\\n 不支持 \$SYSTEM \${MAJOR[int]} 以下系统,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E25]="If there is a WARP+ License, please enter it, otherwise press Enter to continue:"
 T[C25]="如有 WARP+ License 请输入，没有可回车继续:"
 T[E26]="Input errors up to 5 times.The script is aborted."
@@ -792,8 +800,8 @@ T[E37]="Congratulations! WARP is turned on. Spend time:\$(( end - start )) secon
 T[C37]="恭喜！WARP 已开启，总耗时:\$(( end - start ))秒， 脚本当天运行次数:\$TODAY，累计运行次数：\$TOTAL"
 T[E38]="Turn on WGCF: [docker exec -it wgcf sh] and [wg-quick up wgcf; exit]. Turn off WGCF: [docker exec -it wgcf sh] and [wg-quick down wgcf; exit]"
 T[C38]="运行 WGCF: [docker exec -it wgcf sh], 然后 [wg-quick up wgcf; exit]; 关闭 WGCF:[docker exec -it wgcf sh], 然后 [wg-quick down wgcf; exit]"
-T[E39]="WARP installation failed. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C39]="WARP 安装失败，问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E39]="WARP installation failed. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C39]="WARP 安装失败，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E40]="WARP docker have been completely deleted!"
 T[C40]="WARP docker 已彻底删除!"
 T[E41]="Choose:"
@@ -814,8 +822,8 @@ T[E48]="WARP+ quota"
 T[C48]="剩余流量"
 T[E49]="Successfully synchronized the latest version"
 T[C49]="成功！已同步最新脚本，版本号"
-T[E50]="Upgrade failed. Feedback:[https://github.com/fscarmen/warp/issues]"
-T[C50]="升级失败，问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E50]="Upgrade failed. Feedback:[https://github.com/vruru/warp-selfheal/issues]"
+T[C50]="升级失败，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E51]="Add WARP IPv4 interface to IPv6 only VPS"
 T[C51]="为 IPv6 only 添加 IPv4 网络接口"
 T[E52]="Add WARP IPv6 interface to IPv4 only VPS"
@@ -876,8 +884,8 @@ T[E79]="\n Is there a WARP+ or Teams account?\n 1. WARP+\n 2. Teams\n 3. use fre
 T[C79]="\n 如有 WARP+ 或 Teams 账户请选择\n 1. WARP+\n 2. Teams\n 3. 使用免费账户 (默认)\n"
 T[E80]="Device name：\$(grep -s 'Device name' /etc/wireguard/info.log | awk '{ print \$NF }')\\\n Quota：\$(grep -s Quota /etc/wireguard/info.log | awk '{ print \$(NF-1), \$NF }')"
 T[C80]="设备名:\$(grep -s 'Device name' /etc/wireguard/info.log | awk '{ print \$NF }')\\\n 剩余流量:\$(grep -s Quota /etc/wireguard/info.log | awk '{ print \$(NF-1), \$NF }')"
-T[E81]="Curren architecture \$(arch) is not supported. Feedback: [https://github.com/fscarmen/warp/issues]"
-T[C81]="当前架构 \$(arch) 暂不支持,问题反馈:[https://github.com/fscarmen/warp/issues]"
+T[E81]="Curren architecture \$(arch) is not supported. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+T[C81]="当前架构 \$(arch) 暂不支持,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 T[E82]="( match √ )"
 T[C82]="( 符合 √ )"
 T[E83]="( mismatch X )"
@@ -979,7 +987,7 @@ uninstall() {
   docker inspect wgcf >/dev/null 2>&1 && docker rm -f wgcf
 
   # 删除镜像
-  local IMAGE_ID=$(docker images fscarmen/wgcf:$ARCHITECTURE --format "{{.ID}}")
+  local IMAGE_ID=$(docker images warp-selfheal-wgcf:$ARCHITECTURE --format "{{.ID}}")
   grep -q '.' <<< "$IMAGE_ID" && docker rmi -f $IMAGE_ID
 
   # 删除文件
@@ -995,7 +1003,7 @@ uninstall() {
 
 # 同步脚本至最新版本
 ver() {
-  wget -N -P /etc/wireguard https://gitlab.com/fscarmen/warp/-/raw/main/docker.sh
+  wget -N -P /etc/wireguard https://raw.githubusercontent.com/vruru/warp-selfheal/main/docker.sh
   chmod +x /etc/wireguard/docker.sh
   ln -sf /etc/wireguard/docker.sh /usr/bin/warp
   green " ${T[${L}49]}:$(grep ^VERSION /etc/wireguard/docker.sh | sed "s/.*=//g")  ${T[${L}17]}：$(grep "T\[${L}1]" /etc/wireguard/docker.sh | cut -d \" -f2) " || red " ${T[${L}50]} "
@@ -1110,7 +1118,7 @@ input_license() {
 # 输入 Teams 账户 URL（如有）
 input_url() {
   [[ -z $URL ]] && reading " ${T[${L}74]} " URL
-  URL=${URL:-'https://gist.githubusercontent.com/fscarmen/56aaf02d743551737c9973b8be7a3496/raw/16cf34edf5fb28be00f53bb1c510e95a35491032/com.cloudflare.onedotonedotonedotone_preferences.xml'}
+  [[ -z $URL ]] && { red " A Teams configuration URL is required. "; return 1; }
   TEAMS=$(curl -sSL "$URL" | sed "s/\"/\&quot;/g")
   PRIVATEKEY=$(expr "$TEAMS" : '.*private_key&quot;>\([^<]*\).*')
   PUBLICKEY=$(expr "$TEAMS" : '.*public_key&quot;:&quot;\([^&]*\).*')
@@ -1196,7 +1204,13 @@ install() {
   {
     green " \n${T[${L}29]}\n " && ! systemctl is-active docker >/dev/null 2>&1 && curl -sSL get.docker.com | sh
 
-    docker run -dit --restart=always --network=host --name wgcf --device /dev/net/tun --privileged --cap-add net_admin --cap-add sys_module -v /etc/wireguard:/etc/wireguard -v /lib/modules:/lib/modules fscarmen/wgcf:"$ARCHITECTURE"
+    local WARP_DOCKER_IMAGE="warp-selfheal-wgcf:$ARCHITECTURE"
+    if ! docker image inspect "$WARP_DOCKER_IMAGE" >/dev/null 2>&1; then
+      curl -fsSL https://raw.githubusercontent.com/vruru/warp-selfheal/main/docker/wgcf/Dockerfile -o /tmp/warp-selfheal-wgcf.Dockerfile
+      docker build --pull -t "$WARP_DOCKER_IMAGE" -f /tmp/warp-selfheal-wgcf.Dockerfile /tmp
+      rm -f /tmp/warp-selfheal-wgcf.Dockerfile
+    fi
+    docker run -dit --restart=always --network=host --name wgcf --device /dev/net/tun --privileged --cap-add net_admin --cap-add sys_module -v /etc/wireguard:/etc/wireguard -v /lib/modules:/lib/modules "$WARP_DOCKER_IMAGE"
   } &
 
   # 注册 WARP 账户 (将生成 wgcf-account.toml 文件保存账户信息)
@@ -1207,7 +1221,7 @@ install() {
 
     # 安装 wgcf，尽量下载官方的最新版本，如官方 wgcf 下载不成功，将使用 jsDelivr ，以更好的支持双栈。并添加执行权限
     wget --no-check-certificate -T1 -t1 $CDN -O /usr/local/bin/wgcf https://github.com/ViRb3/wgcf/releases/download/v"$latest"/wgcf_"$latest"_linux_$ARCHITECTURE ||
-    wget --no-check-certificate $CDN -O /usr/local/bin/wgcf https://cdn.jsdelivr.net/gh/fscarmen/warp/wgcf_"$latest"_linux_$ARCHITECTURE
+    wget --no-check-certificate $CDN -O /usr/local/bin/wgcf https://raw.githubusercontent.com/vruru/warp-selfheal/main/wgcf/wgcf_2.2.29_linux_$ARCHITECTURE
     chmod +x /usr/local/bin/wgcf
 
     # 注册 WARP 账户 (将生成 wgcf-account.toml 文件保存账户信息)

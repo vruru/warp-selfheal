@@ -21,18 +21,18 @@ E[3]="This project is designed to add WARP network interface for VPS, using warp
 C[3]="本项目专为 VPS 添加 WARP 网络接口，使用 wire-go 核心程序，利用CloudFlare-WARP 的各类接口，集成 wireguard-go，可以完全替代 WGCF。 救活了香港、多伦多等 VPS 也可以获取 WARP IP。再次感谢 @CoiaPrant 及其团队。项目地址: https://gitlab.com/ProjectWARP/warp-go/-/tree/master/"
 E[4]="Choose:"
 C[4]="请选择:"
-E[5]="You must run the script as root. You can type sudo -i and then download and run it again. Feedback:[https://github.com/fscarmen/warp-sh/issues]"
-C[5]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[6]="This script only supports Debian, Ubuntu, CentOS, Arch or Alpine systems, Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[6]="本脚本只支持 Debian、Ubuntu、CentOS、Arch 或 Alpine 系统,问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[5]="You must run the script as root. You can type sudo -i and then download and run it again. Feedback:[https://github.com/vruru/warp-selfheal/issues]"
+C[5]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[6]="This script only supports Debian, Ubuntu, CentOS, Arch or Alpine systems, Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[6]="本脚本只支持 Debian、Ubuntu、CentOS、Arch 或 Alpine 系统,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[7]="global"
 C[7]="全局"
 E[8]="Install dependence-list:"
 C[8]="安装依赖列表:"
 E[9]="Best MTU found."
 C[9]="已找到最佳 MTU"
-E[10]="No suitable solution was found for modifying the warp-go configuration file warp.conf and the script aborted. When you see this message, please send feedback on the bug to:[https://github.com/fscarmen/warp-sh/issues]"
-C[10]="没有找到适合的方案用于修改 warp-go 配置文件 warp.conf，脚本中止。当你看到此信息，请把该 bug 反馈至:[https://github.com/fscarmen/warp-sh/issues]"
+E[10]="No suitable solution was found for modifying the warp-go configuration file warp.conf and the script aborted. When you see this message, please send feedback on the bug to:[https://github.com/vruru/warp-selfheal/issues]"
+C[10]="没有找到适合的方案用于修改 warp-go 配置文件 warp.conf，脚本中止。当你看到此信息，请把该 bug 反馈至:[https://github.com/vruru/warp-selfheal/issues]"
 E[11]="Warp-go is not installed yet."
 C[11]="还没有安装 warp-go"
 E[12]="To install, press [y] and other keys to exit:"
@@ -57,14 +57,14 @@ E[21]="IPv\$PRIO priority"
 C[21]="IPv\$PRIO 优先"
 E[22]="Current Teams account is not available. Switch back to free account automatically."
 C[22]="当前 Teams 账户不可用，自动切换回免费账户"
-E[23]="Failed more than \${j} times, script aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[23]="失败已超过\${j}次，脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[23]="Failed more than \${j} times, script aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[23]="失败已超过\${j}次，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[24]="non-"
 C[24]="非"
 E[25]="Successfully got WARP \$ACCOUNT_TYPE network.\\\n Running in \${GLOBAL_TYPE}global mode."
 C[25]="已成功获取 WARP \$ACCOUNT_TYPE 网络\\\n 运行在 \${GLOBAL_TYPE}全局 模式"
-E[83]="Cannot detect any IPv4 or IPv6. The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[83]="检测不到任何 IPv4 或 IPv6。脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[83]="Cannot detect any IPv4 or IPv6. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[83]="检测不到任何 IPv4 或 IPv6。脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[27]="WARP is turned off. It could be turned on again by [warp-go o]"
 C[27]="已暂停 WARP，再次开启可以用 warp-go o"
 E[28]="WARP Non-global mode cannot switch between single and double stacks."
@@ -83,10 +83,10 @@ E[34]="Please enter the correct number"
 C[34]="请输入正确数字"
 E[35]="Checking VPS infomation..."
 C[35]="检查环境中……"
-E[36]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[36]="没有加载 TUN 模块，请在管理后台开启或联系供应商了解如何开启，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[37]="Curren architecture \$(uname -m) is not supported. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[37]="当前架构 \$(uname -m) 暂不支持,问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[36]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[36]="没有加载 TUN 模块，请在管理后台开启或联系供应商了解如何开启，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[37]="Curren architecture \$(uname -m) is not supported. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[37]="当前架构 \$(uname -m) 暂不支持,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[38]="Version"
 C[38]="脚本版本"
 E[39]="New features"
@@ -111,22 +111,22 @@ E[48]="Native dualstack"
 C[48]="原生双栈"
 E[49]="Run again with warp-go [option] [lisence], such as"
 C[49]="再次运行用 warp-go [option] [lisence]，如"
-E[50]="Registration of WARP account failed, script aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[50]="注册 WARP 账户失败，脚本中止，问题反馈: [https://github.com/fscarmen/warp-sh/issues]"
-E[51]="Warp-go not yet installed. No account registered. Script aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[51]="warp-go 还没有安装，没有注册账户，脚本中止，问题反馈: [https://github.com/fscarmen/warp-sh/issues]"
+E[50]="Registration of WARP account failed, script aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[50]="注册 WARP 账户失败，脚本中止，问题反馈: [https://github.com/vruru/warp-selfheal/issues]"
+E[51]="Warp-go not yet installed. No account registered. Script aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[51]="warp-go 还没有安装，没有注册账户，脚本中止，问题反馈: [https://github.com/vruru/warp-selfheal/issues]"
 E[52]="Wireguard configuration file: /opt/warp-go/wgcf.conf\n"
 C[52]="Wireguard 配置文件: /opt/warp-go/wgcf.conf\n"
-E[53]="Warp-go installed. Script aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[53]="warp-go 已安装，脚本中止，问题反馈: [https://github.com/fscarmen/warp-sh/issues]"
+E[53]="Warp-go installed. Script aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[53]="warp-go 已安装，脚本中止，问题反馈: [https://github.com/vruru/warp-selfheal/issues]"
 E[54]="Sing-box configuration file: /opt/warp-go/singbox.json\n"
 C[54]="Sing-box 配置文件: /opt/warp-go/singbox.json\n"
 E[55]="Please choose the priority:\n  1. IPv4\n  2. IPv6\n  3. Use initial settings (default)"
 C[55]="请选择优先级别:\n  1. IPv4\n  2. IPv6\n  3. 使用 VPS 初始设置 (默认)"
-E[56]="Download warp-go zip file unsuccessful. Script exits. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[56]="下载 warp-go 压缩文件不成功，脚本退出，问题反馈: [https://github.com/fscarmen/warp-sh/issues]"
-E[57]="Warp-go file does not exist, script exits. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[57]="Warp-go 文件不存在，脚本退出，问题反馈: [https://github.com/fscarmen/warp-sh/issues]"
+E[56]="Download warp-go zip file unsuccessful. Script exits. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[56]="下载 warp-go 压缩文件不成功，脚本退出，问题反馈: [https://github.com/vruru/warp-selfheal/issues]"
+E[57]="Warp-go file does not exist, script exits. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[57]="Warp-go 文件不存在，脚本退出，问题反馈: [https://github.com/vruru/warp-selfheal/issues]"
 E[58]="Attempts to register WARP account..."
 C[58]="注册 WARP 账户中……"
 E[59]="Try \${i}"
@@ -137,8 +137,8 @@ E[61]="Install warp-go..."
 C[61]="已安装 warp-go"
 E[62]="Congratulations! WARP \$ACCOUNT_TYPE has been turn on. Total time spent:\$(( end - start )) seconds.\\\n Number of script runs in the day: \$TODAY. Total number of runs: \$TOTAL."
 C[62]="恭喜！WARP \$ACCOUNT_TYPE 已开启，总耗时: \$(( end - start ))秒\\\n 脚本当天运行次数: \$TODAY，累计运行次数: \$TOTAL"
-E[63]="Warp-go installation failed. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[63]="warp-go 安装失败，问题反馈: [https://github.com/fscarmen/warp-sh/issues]"
+E[63]="Warp-go installation failed. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[63]="warp-go 安装失败，问题反馈: [https://github.com/vruru/warp-selfheal/issues]"
 E[64]="Add WARP IPv4 global network interface for \${NATIVE[n]}, IPv4 priority (bash warp-go.sh 4)"
 C[64]="为 \${NATIVE[n]} 添加 WARP IPv4 全局 网络接口，IPv4 优先 (bash warp-go.sh 4)"
 E[65]="Add WARP IPv4 global network interface for \${NATIVE[n]}, IPv6 priority (bash warp-go.sh 4)"
@@ -215,7 +215,7 @@ cleanup_resources() {
 check_cdn() {
   # GITHUB_PROXY 数组第一个元素为空，相当于直连
   for PROXY_URL in "${GITHUB_PROXY[@]}"; do
-    local PROXY_STATUS_CODE=$(wget --server-response --spider --quiet --timeout=3 --tries=1 ${PROXY_URL}https://raw.githubusercontent.com/fscarmen/warp-sh/main/README.md 2>&1 | awk '/HTTP\//{last_field = $2} END {print last_field}')
+    local PROXY_STATUS_CODE=$(wget --server-response --spider --quiet --timeout=3 --tries=1 ${PROXY_URL}https://raw.githubusercontent.com/vruru/warp-selfheal/main/README.md 2>&1 | awk '/HTTP\//{last_field = $2} END {print last_field}')
     [ "$PROXY_STATUS_CODE" = "200" ] && GH_PROXY="$PROXY_URL" && break
   done
 }
@@ -414,7 +414,7 @@ warp_api(){
 
   case "$RUN" in
     register )
-      local ACCOUNT=$(bash <(curl -sSL --connect-timeout 5 --max-time 5 --retry 0 "https://gitlab.com/fscarmen/warp/-/raw/main/api.sh") --register)
+      local ACCOUNT=$(bash <(curl -sSL --connect-timeout 5 --max-time 5 --retry 0 "https://raw.githubusercontent.com/vruru/warp-selfheal/main/api.sh") --register)
       grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT"
       ;;
     cancel )
@@ -440,10 +440,9 @@ check_install() {
   else
     STATUS=0
     {
-      # 预下载 warp-go，并添加执行权限，如因 gitlab 接口问题未能获取，默认 v1.0.8
-      latest=$(wget -qO- -T2 -t1 https://gitlab.com/api/v4/projects/ProjectWARP%2Fwarp-go/releases | awk -F '"' '{for (i=0; i<NF; i++) if ($i=="tag_name") {print $(i+2); exit}}' | sed "s/v//")
-      latest=${latest:-'1.0.8'}
-      wget --no-check-certificate -T5 -qO- https://gitlab.com/fscarmen/warp/-/raw/main/warp-go/warp-go_"$latest"_linux_"$ARCHITECTURE".tar.gz | tar xz -C /tmp/ warp-go
+      # 使用仓库内镜像的已验证版本，避免原项目或发行接口消失后无法安装
+      latest='1.0.8'
+      wget --no-check-certificate -T5 -qO- https://raw.githubusercontent.com/vruru/warp-selfheal/main/warp-go/warp-go_"$latest"_linux_"$ARCHITECTURE".tar.gz | tar xz -C /tmp/ warp-go
       chmod +x /tmp/warp-go
     }&
   fi
@@ -652,7 +651,7 @@ uninstall() {
   unset IP4 IP6 WAN4 WAN6 COUNTRY4 COUNTRY6 ASNORG4 ASNORG6 INTERFACE_4 INTERFACE_6
 
   # 如已安装 warp_unlock 项目，先行卸载
-  [ -s /usr/bin/warp_unlock.sh ] && bash <(curl -sSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh) -U -$L
+  [ -s /usr/bin/warp_unlock.sh ] && bash <(curl -sSL https://raw.githubusercontent.com/vruru/warp-selfheal/main/vendor/warp_unlock/unlock.sh) -U -$L
 
   # 卸载
   systemctl disable --now warp-go >/dev/null 2>&1
@@ -670,7 +669,7 @@ uninstall() {
 # 同步脚本至最新版本
 ver() {
   mkdir -p /tmp; rm -f /tmp/warp-go.sh
-  wget -T2 -O /tmp/warp-go.sh https://gitlab.com/fscarmen/warp/-/raw/main/warp-go.sh
+  wget -T2 -O /tmp/warp-go.sh https://raw.githubusercontent.com/vruru/warp-selfheal/main/warp-go.sh
   if [ -s /tmp/warp-go.sh ]; then
     mv /tmp/warp-go.sh /opt/warp-go/
     chmod +x /opt/warp-go/warp-go.sh
@@ -1239,7 +1238,7 @@ EOF
 [Unit]
 Description=warp-go service
 After=network.target
-Documentation=https://github.com/fscarmen/warp-sh
+Documentation=https://github.com/vruru/warp-selfheal
 Documentation=https://gitlab.com/ProjectWARP/warp-go
 
 [Service]

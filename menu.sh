@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-VERSION='3.2.7'
+# Modified 2026-08-28: add automatic WireProxy SOCKS health checks and recovery.
+VERSION='3.2.7-selfheal.2'
+
+# 派生版自更新地址。
+SELFHEAL_RAW_URL='https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh'
 
 # 环境变量用于在Debian或Ubuntu操作系统中设置非交互式（noninteractive）安装模式
 export DEBIAN_FRONTEND=noninteractive
@@ -14,16 +18,16 @@ trap on_interrupt_exit INT QUIT TERM
 
 E[0]="\n Language:\n 1. English (default) \n 2. 简体中文"
 C[0]="${E[0]}"
-E[1]="1. Optimize IPv6 routing rules — cover the whole /64 subnet; 2. Add built-in auto keepalive — periodically check the WARP interface and auto re-register a new IP when it drops, preventing network loss\n Upgrade existing install: bash <(curl -sSL https://raw.githubusercontent.com/fscarmen/tools/main/keepalive-upgrade.sh)"
-C[1]="1. 优化 IPv6 路由规则，同网段地址均能正常访问; 2. 新增内置自动保活 —— 定时检测 WARP 接口状态，掉线后自动重新获取新的 WARP IP，避免网络中断\n 旧版升级一句命令: bash <(curl -sSL https://raw.githubusercontent.com/fscarmen/tools/main/keepalive-upgrade.sh)"
-E[2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[3]="没有加载 TUN 模块，请在管理后台开启或联系供应商了解如何开启，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[4]="Current operating system is: \$SYSTEM, Linux Client only supports Ubuntu, Debian and CentOS. The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[4]="当前操作系统是: \$SYSTEM。 Linux Client 只支持 Ubuntu, Debian 和 CentOS，脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[5]="The script supports Debian, Ubuntu, CentOS, Fedora, Arch or Alpine systems only. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[5]="本脚本只支持 Debian、Ubuntu、CentOS、Fedora、Arch 或 Alpine 系统,问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[1]="Self-heal fork: add persistent WireProxy SOCKS health checks, automatic recovery, and clean lifecycle integration"
+C[1]="自愈派生版：WireProxy SOCKS 持续健康检查、自动恢复，并完整接入安装、开关、升级和卸载流程"
+E[2]="The script must be run as root, you can enter sudo -i and then download and run again. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[2]="必须以root方式运行脚本，可以输入 sudo -i 后重新下载运行，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[3]="The TUN module is not loaded. You should turn it on in the control panel. Ask the supplier for more help. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[3]="没有加载 TUN 模块，请在管理后台开启或联系供应商了解如何开启，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[4]="Current operating system is: \$SYSTEM, Linux Client only supports Ubuntu, Debian and CentOS. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[4]="当前操作系统是: \$SYSTEM。 Linux Client 只支持 Ubuntu, Debian 和 CentOS，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[5]="The script supports Debian, Ubuntu, CentOS, Fedora, Arch or Alpine systems only. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[5]="本脚本只支持 Debian、Ubuntu、CentOS、Fedora、Arch 或 Alpine 系统,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[6]="warp h (help)\n warp n (Get the WARP IP)\n warp o (Turn off WARP temporarily)\n warp u (Turn off and uninstall WARP interface and Socks5 Linux Client)\n warp b (Upgrade kernel, turn on BBR, change Linux system)\n warp v (Sync the latest version)\n warp r (Connect/Disconnect WARP Linux Client)\n warp 4/6 (Add WARP IPv4/IPv6 interface)\n warp d (Add WARP dualstack interface IPv4 + IPv6)\n warp c (Install WARP Linux Client and set to proxy mode)\n warp l (Install WARP Linux Client and set to WARP mode)\n warp i (Change the WARP IP to support Netflix)\n warp e (Install Iptables + dnsmasq + ipset solution)\n warp w (Install WireProxy solution)\n warp y (Connect/Disconnect WireProxy socks5)\n warp k (Switch between kernel and wireguard-go-reserved)\n warp g (Switch between warp global and non-global)\n warp s 4/6/d (Set stack proiority: IPv4 / IPv6 / VPS default)\n"
 C[6]="warp h (帮助菜单）\n warp n (获取 WARP IP)\n warp o (临时warp开关)\n warp u (卸载 WARP 网络接口和 Socks5 Client)\n warp b (升级内核、开启BBR及DD)\n warp v (同步脚本至最新版本)\n warp r (WARP Linux Client 开关)\n warp 4/6 (WARP IPv4/IPv6 单栈)\n warp d (WARP 双栈)\n warp c (安装 WARP Linux Client，开启 Socks5 代理模式)\n warp l (安装 WARP Linux Client，开启 WARP 模式)\n warp i (更换支持 Netflix 的IP)\n warp e (安装 Iptables + dnsmasq + ipset 解决方案)\n warp w (安装 WireProxy 解决方案)\n warp y (WireProxy socks5 开关)\n warp k (切换 wireguard 内核 / wireguard-go-reserved)\n warp g (切换 warp 全局 / 非全局)\n warp s 4/6/d (优先级: IPv4 / IPv6 / VPS default)\n"
 E[7]="Install dependence-list:"
@@ -32,20 +36,20 @@ E[8]="All dependencies already exist and do not need to be installed additionall
 C[8]="所有依赖已存在，不需要额外安装"
 E[9]="Port must be 1000-65535. Please re-input\(\${i} times remaining\):"
 C[9]="端口必须为 1000-65535，请重新输入\(剩余\${i}次\):"
-E[10]="wireguard-tools installation failed, The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[10]="wireguard-tools 安装失败，脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[10]="wireguard-tools installation failed, The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[10]="wireguard-tools 安装失败，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[11]="Maximum \${j} attempts to get WARP IP..."
 C[11]="后台获取 WARP IP 中,最大尝试\${j}次……"
 E[12]="Try \${i}"
 C[12]="第\${i}次尝试"
-E[13]="There have been more than \${j} failures. The script is aborted. Attach the above error message. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[13]="失败已超过\${j}次，脚本中止，附上以上错误提示，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[13]="There have been more than \${j} failures. The script is aborted. Attach the above error message. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[13]="失败已超过\${j}次，脚本中止，附上以上错误提示，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[14]="Got the WARP\$TYPE IP successfully"
 C[14]="已成功获取 WARP\$TYPE 网络"
 E[15]="WARP is turned off. It could be turned on again by [warp o]"
 C[15]="已暂停 WARP，再次开启可以用 warp o"
-E[16]="The script specifically adds WARP network interface for VPS, detailed:[https://github.com/fscarmen/warp-sh]\n Features:\n\t • Support WARP+ account. Third-party scripts is use to upgrade kernel.\n\t • Not only menus, but commands with option.\n\t • Support system: Ubuntu 16.04、18.04、20.04、22.04,Debian 9、10、11,CentOS 7、8、9, Alpine, Arch Linux 3.\n\t • Support architecture: AMD,ARM and s390x\n\t • Automatically select four WireGuard solutions. Performance: Kernel with WireGuard integration > Install kernel module > wireguard-go\n\t • Suppert WARP Linux client.\n\t • Output WARP status, IP region and asn\n"
-C[16]="本项目专为 VPS 添加 warp 网络接口，详细说明: [https://github.com/fscarmen/warp-sh]\n 脚本特点:\n\t • 支持 WARP+ 账户，附带升级内核 BBR 脚本\n\t • 普通用户友好的菜单，进阶者通过后缀选项快速搭建\n\t • 智能判断操作系统: Ubuntu 、Debian 、CentOS、 Alpine 和 Arch Linux，请务必选择 LTS 系统\n\t • 支持硬件结构类型: AMD、 ARM 和 s390x\n\t • 结合 Linux 版本和虚拟化方式，自动优选4个 WireGuard 方案。网络性能方面: 内核集成 WireGuard > 安装内核模块 > wireguard-go\n\t • 支持 WARP Linux Socks5 Client\n\t • 输出执行结果，提示是否使用 WARP IP ，IP 归属地和线路提供商\n"
+E[16]="The script specifically adds WARP network interface for VPS, detailed:[https://github.com/vruru/warp-selfheal]\n Features:\n\t • Support WARP+ account. Third-party scripts is use to upgrade kernel.\n\t • Not only menus, but commands with option.\n\t • Support system: Ubuntu 16.04、18.04、20.04、22.04,Debian 9、10、11,CentOS 7、8、9, Alpine, Arch Linux 3.\n\t • Support architecture: AMD,ARM and s390x\n\t • Automatically select four WireGuard solutions. Performance: Kernel with WireGuard integration > Install kernel module > wireguard-go\n\t • Suppert WARP Linux client.\n\t • Output WARP status, IP region and asn\n"
+C[16]="本项目专为 VPS 添加 warp 网络接口，详细说明: [https://github.com/vruru/warp-selfheal]\n 脚本特点:\n\t • 支持 WARP+ 账户，附带升级内核 BBR 脚本\n\t • 普通用户友好的菜单，进阶者通过后缀选项快速搭建\n\t • 智能判断操作系统: Ubuntu 、Debian 、CentOS、 Alpine 和 Arch Linux，请务必选择 LTS 系统\n\t • 支持硬件结构类型: AMD、 ARM 和 s390x\n\t • 结合 Linux 版本和虚拟化方式，自动优选4个 WireGuard 方案。网络性能方面: 内核集成 WireGuard > 安装内核模块 > wireguard-go\n\t • 支持 WARP Linux Socks5 Client\n\t • 输出执行结果，提示是否使用 WARP IP ，IP 归属地和线路提供商\n"
 E[17]="Version"
 C[17]="脚本版本"
 E[18]="New features"
@@ -80,8 +84,8 @@ E[32]="Step 1/3: Install dependencies..."
 C[32]="进度 1/3: 安装系统依赖……"
 E[33]="Step 2/3: WARP configuration file has been processed"
 C[33]="进度 2/3: 已处理好 WARP 配置文件"
-E[34]="Failed to change port. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[34]="更换端口不成功，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[34]="Failed to change port. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[34]="更换端口不成功，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[35]="Change the WARP IP to support Netflix (warp i)"
 C[35]="更换支持 Netflix 的 IP (warp i)"
 E[36]="1. Brush WARP IPv4\n 2. Brush WARP IPv6 (default)"
@@ -96,12 +100,12 @@ E[40]="Menu choose"
 C[40]="菜单选项"
 E[41]="Spend time: \$(( end - start )) seconds.\\\n The script runs today: \$TODAY. Total: \$TOTAL"
 C[41]="总耗时: \$(( end - start ))秒，脚本当天运行次数: \$TODAY，累计运行次数: \$TOTAL"
-E[42]="Curren architecture \$(uname -m) is not supported. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[42]="当前架构 \$(uname -m) 暂不支持,问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[42]="Curren architecture \$(uname -m) is not supported. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[42]="当前架构 \$(uname -m) 暂不支持,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[43]="Run again with warp [option] [lisence], such as"
 C[43]="再次运行用 warp [option] [lisence]，如"
-E[44]="WARP installation failed. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[44]="WARP 安装失败，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[44]="WARP installation failed. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[44]="WARP 安装失败，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[45]="WARP interface, Linux Client and Wireproxy have been completely deleted!"
 C[45]="WARP 网络接口、 Linux Client 和 Wireproxy 已彻底删除!"
 E[46]="Working mode: \$GLOBAL_OR_NOT"
@@ -116,8 +120,8 @@ E[50]="Choose:"
 C[50]="请选择:"
 E[51]="Please enter the correct number"
 C[51]="请输入正确数字"
-E[52]="Fail to establish CloudflareWARP interface. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[52]="创建 CloudflareWARP 网络接口失败，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[52]="Fail to establish CloudflareWARP interface. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[52]="创建 CloudflareWARP 网络接口失败，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[53]="Uninstall Socks5 Proxy Client was complete."
 C[53]="Socks5 Proxy Client 卸载成功"
 E[54]="\$(date +'%F %T') Region: \$REGION Done. IPv\$NF: \$WAN  \$COUNTRY  \$ASNORG. Retest after 1 hour. Brush ip runing time:\$DAY days \$HOUR hours \$MIN minutes \$SEC seconds"
@@ -142,8 +146,8 @@ E[63]="Change Client or WireProxy port"
 C[63]="更改 Client 或 WireProxy 端口"
 E[64]="Successfully synchronized the latest version"
 C[64]="成功！已同步最新脚本，版本号"
-E[65]="Upgrade failed. Feedback:[https://github.com/fscarmen/warp-sh/issues]"
-C[65]="升级失败，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[65]="Upgrade failed. Feedback:[https://github.com/vruru/warp-selfheal/issues]"
+C[65]="升级失败，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[66]="Add WARP IPv4 interface to \${NATIVE[n]} VPS (bash menu.sh 4)"
 C[66]="为 \${NATIVE[n]} 添加 WARP IPv4 网络接口 (bash menu.sh 4)"
 E[67]="Add WARP IPv6 interface to \${NATIVE[n]} VPS (bash menu.sh 6)"
@@ -186,8 +190,8 @@ E[85]="Client was installed.\n connect/disconnect by [warp r].\n uninstall by [w
 C[85]="Linux Client 已安装\n 连接/断开: warp r\n 卸载: warp u"
 E[86]="Client is working. Socks5 proxy listening on: \$(ss -nltp | grep -E 'warp|wireproxy' | awk '{print \$4}')"
 C[86]="Linux Client 正常运行中。 Socks5 代理监听:\$(ss -nltp | grep -E 'warp|wireproxy' | awk '{print \$4}')"
-E[87]="Fail to establish Socks5 proxy. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[87]="创建 Socks5 代理失败，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[87]="Fail to establish Socks5 proxy. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[87]="创建 Socks5 代理失败，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[88]="Connect the client (warp r)"
 C[88]="连接 Client (warp r)"
 E[89]="Disconnect the client (warp r)"
@@ -212,12 +216,12 @@ E[98]="Uninstall Wireproxy was complete."
 C[98]="Wireproxy 卸载成功"
 E[99]="WireProxy is connected"
 C[99]="WireProxy 已连接"
-E[100]="Cannot detect any IPv4 or IPv6. The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[100]="检测不到任何 IPv4 或 IPv6。脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[101]="Client support amd64 and arm64 only. Curren architecture \$ARCHITECTURE. Official Support List: [https://pkg.cloudflareclient.com/packages/cloudflare-warp]. The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[101]="Client 只支持 amd64 和 arm64 架构，当前架构 \$ARCHITECTURE，官方支持列表: [https://pkg.cloudflareclient.com/packages/cloudflare-warp]。脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[102]="Client is only supported on CentOS 8 and above. Official Support List: [https://pkg.cloudflareclient.com]. The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[102]="Client 只支持 CentOS 8 或以上系统，官方支持列表: [https://pkg.cloudflareclient.com]。脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[100]="Cannot detect any IPv4 or IPv6. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[100]="检测不到任何 IPv4 或 IPv6。脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[101]="Client support amd64 and arm64 only. Curren architecture \$ARCHITECTURE. Official Support List: [https://pkg.cloudflareclient.com/packages/cloudflare-warp]. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[101]="Client 只支持 amd64 和 arm64 架构，当前架构 \$ARCHITECTURE，官方支持列表: [https://pkg.cloudflareclient.com/packages/cloudflare-warp]。脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[102]="Client is only supported on CentOS 8 and above. Official Support List: [https://pkg.cloudflareclient.com]. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[102]="Client 只支持 CentOS 8 或以上系统，官方支持列表: [https://pkg.cloudflareclient.com]。脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[103]="Port \$PORT is in use. Please input another Port(\${i} times remaining):"
 C[103]="\$PORT 端口占用中，请使用另一端口(剩余\${i}次):"
 E[104]="Please customize the Client port (1000-65535. Default to 40000 if it is blank):"
@@ -228,12 +232,12 @@ E[106]="Switch \${WARP_BEFORE[m]} to \${WARP_AFTER2[m]} \${SHORTCUT2[m]}"
 C[106]="\${WARP_BEFORE[m]} 转为 \${WARP_AFTER2[m]} \${SHORTCUT2[m]}"
 E[107]="Failed registration, using a preset free account."
 C[107]="注册失败，使用预设的免费账户"
-E[108]="The configuration file warp.conf cannot be found. The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[108]="找不到配置文件 warp.conf，脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[109]="Socks5 Proxy Client is working now. WARP IPv4 and dualstack interface could not be switch to. The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[109]="Socks5 代理正在运行中，不能转为 WARP IPv4 或者双栈网络接口，脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
-E[110]="Socks5 Proxy Client is working now. WARP IPv4 and dualstack interface could not be installed. The script is aborted. Feedback: [https://github.com/fscarmen/warp-sh/issues]"
-C[110]="Socks5 代理正在运行中，WARP IPv4 或者双栈网络接口不能安装，脚本中止，问题反馈:[https://github.com/fscarmen/warp-sh/issues]"
+E[108]="The configuration file warp.conf cannot be found. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[108]="找不到配置文件 warp.conf，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[109]="Socks5 Proxy Client is working now. WARP IPv4 and dualstack interface could not be switch to. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[109]="Socks5 代理正在运行中，不能转为 WARP IPv4 或者双栈网络接口，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
+E[110]="Socks5 Proxy Client is working now. WARP IPv4 and dualstack interface could not be installed. The script is aborted. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
+C[110]="Socks5 代理正在运行中，WARP IPv4 或者双栈网络接口不能安装，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[111]="Cannot switch to the same form as the current one."
 C[111]="不能切换为当前一样的形态"
 E[112]="Not available for IPv6 only VPS"
@@ -282,8 +286,8 @@ E[133]="Confirm all uninstallation please press [y], other keys do not uninstall
 C[133]="确认全部卸载请按 [y]，其他键默认不卸载:"
 E[134]="Uninstall dependencies were complete."
 C[134]="依赖卸载成功"
-E[135]="No suitable solution was found for modifying the warp configuration file warp.conf and the script aborted. When you see this message, please send feedback on the bug to:[https://github.com/fscarmen/warp-sh/issues]"
-C[135]="没有找到适合的方案用于修改 warp 配置文件 warp.conf，脚本中止。当你看到此信息，请把该 bug 反馈至:[https://github.com/fscarmen/warp-sh/issues]"
+E[135]="No suitable solution was found for modifying the warp configuration file warp.conf and the script aborted. When you see this message, please send feedback on the bug to:[https://github.com/vruru/warp-selfheal/issues]"
+C[135]="没有找到适合的方案用于修改 warp 配置文件 warp.conf，脚本中止。当你看到此信息，请把该 bug 反馈至:[https://github.com/vruru/warp-selfheal/issues]"
 E[136]="Can only be run using \$KERNEL_OR_WIREGUARD_GO."
 C[136]="只能使用 \$KERNEL_OR_WIREGUARD_GO 运行"
 E[137]="Install using:\n 1. wireguard kernel (default)\n 2. wireguard-go with reserved"
@@ -337,7 +341,7 @@ check_cdn() {
   local PROXY CODE PID CMD
   local _WAIT_COUNT=120
   local PIDS=()
-  local API_URL='https://api.github.com/repos/fscarmen/warp-sh/releases'
+  local API_URL='https://api.github.com/repos/vruru/warp-selfheal'
 
   # 确定下载工具：优先 wget，次选 curl
   if command -v wget >/dev/null 2>&1; then
@@ -531,7 +535,7 @@ warp_api(){
 
   case "$RUN" in
     register )
-      local ACCOUNT=$(bash <(curl -sSL --connect-timeout 5 --max-time 5 --retry 0 "https://gitlab.com/fscarmen/warp/-/raw/main/api.sh") --register)
+      local ACCOUNT=$(bash <(curl -sSL --connect-timeout 5 --max-time 5 --retry 0 "https://raw.githubusercontent.com/vruru/warp-selfheal/main/api.sh") --register)
       grep -q '"id"' <<< "$ACCOUNT" && echo "$ACCOUNT" ||
       echo '{
   "id": "b0fe9b24-3396-486e-a12d-c194dbbb7bfb",
@@ -1148,6 +1152,7 @@ uninstall() {
 
   # 卸载 Wireproxy
   uninstall_wireproxy() {
+    wireproxy_watchdog_uninstall
     if [ "$SYSTEM" = Alpine ]; then
       rc-update del wireproxy default
       rc-service wireproxy stop >/dev/null 2>&1
@@ -1163,7 +1168,7 @@ uninstall() {
   }
 
   # 如已安装 warp_unlock 项目，先行卸载
-  [ -e /usr/bin/warp_unlock.sh ] && bash <(curl -sSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh) -U -$L
+  [ -e /usr/bin/warp_unlock.sh ] && bash <(curl -sSL https://raw.githubusercontent.com/vruru/warp-selfheal/main/vendor/warp_unlock/unlock.sh) -U -$L
 
   # 根据已安装情况执行卸载任务并显示结果
   [[ "$SYSTEM" = 'Ubuntu' && "$MAJOR_VERSION" -ge 24 ]] && RESOLVER_PKG=resolvconf || RESOLVER_PKG=openresolv
@@ -1212,11 +1217,12 @@ uninstall() {
 # 同步脚本至最新版本
 ver() {
   mkdir -p /tmp; rm -f /tmp/menu.sh
-  wget -O /tmp/menu.sh https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh
-  if [ -s /tmp/menu.sh ]; then
+  wget -O /tmp/menu.sh "$SELFHEAL_RAW_URL"
+  if [ -s /tmp/menu.sh ] && bash -n /tmp/menu.sh; then
     mv /tmp/menu.sh /etc/wireguard/
     chmod +x /etc/wireguard/menu.sh
     ln -sf /etc/wireguard/menu.sh /usr/bin/warp
+    [ -x "$(type -p wireproxy)" ] && bash /etc/wireguard/menu.sh k
     info " $(text 64):$(grep ^VERSION /etc/wireguard/menu.sh | sed "s/.*=//g")  $(text 18):$(grep "${L}\[1\]" /etc/wireguard/menu.sh | cut -d \" -f2) "
   else
     error " $(text 65) "
@@ -1351,15 +1357,242 @@ client_onoff() {
   fi
 }
 
+# WireProxy SOCKS 数据面保活：进程存活但 WARP 隧道失效时也能自动恢复
+wireproxy_watchdog_pause() {
+  mkdir -p /run/warp-wireproxy-watchdog
+  : > /run/warp-wireproxy-watchdog/disabled
+}
+
+wireproxy_watchdog_resume() {
+  rm -f /run/warp-wireproxy-watchdog/{disabled,failures}
+  if [ "$SYSTEM" = Alpine ]; then
+    rc-service crond status >/dev/null 2>&1 || rc-service crond start >/dev/null 2>&1
+  elif [ -f /etc/systemd/system/warp-wireproxy-watchdog.timer ]; then
+    systemctl enable --now warp-wireproxy-watchdog.timer >/dev/null 2>&1
+  fi
+}
+
+wireproxy_watchdog_uninstall() {
+  wireproxy_watchdog_pause
+  if [ "$SYSTEM" = Alpine ]; then
+    [ -f /etc/crontabs/root ] && sed -i '/# warp-wireproxy-watchdog$/d' /etc/crontabs/root
+  else
+    systemctl disable --now warp-wireproxy-watchdog.timer >/dev/null 2>&1
+    rm -f /etc/systemd/system/warp-wireproxy-watchdog.{service,timer}
+    systemctl daemon-reload >/dev/null 2>&1
+    systemctl reset-failed warp-wireproxy-watchdog.service >/dev/null 2>&1
+  fi
+  rm -f /usr/local/sbin/warp-wireproxy-watchdog
+  rm -rf /run/warp-wireproxy-watchdog
+}
+
+selfheal_persist_menu() {
+  [ -r "$0" ] || return 0
+  mkdir -p /etc/wireguard
+  cmp -s "$0" /etc/wireguard/menu.sh || cp -f "$0" /etc/wireguard/menu.sh
+  chmod 755 /etc/wireguard/menu.sh
+  ln -sf /etc/wireguard/menu.sh /usr/bin/warp
+}
+
+wireproxy_watchdog_install() {
+  local WIREPROXY_WAS_ACTIVE=0
+  if [ "$SYSTEM" = Alpine ]; then
+    rc-service wireproxy status >/dev/null 2>&1 && WIREPROXY_WAS_ACTIVE=1
+  else
+    systemctl is-active --quiet wireproxy.service && WIREPROXY_WAS_ACTIVE=1
+  fi
+
+  wireproxy_watchdog_pause
+  mkdir -p /usr/local/sbin
+  cat > /usr/local/sbin/warp-wireproxy-watchdog <<'WIREPROXY_WATCHDOG_EOF'
+#!/usr/bin/env bash
+
+set -u
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+STATE_DIR=/run/warp-wireproxy-watchdog
+FAIL_FILE="$STATE_DIR/failures"
+LOCK_FILE="$STATE_DIR/lock"
+DISABLE_FILE="$STATE_DIR/disabled"
+CONFIG_FILE=/etc/wireguard/proxy.conf
+FAIL_THRESHOLD="${FAIL_THRESHOLD:-2}"
+
+log_message() {
+  logger -t warp-wireproxy-watchdog -- "$*"
+}
+
+mkdir -p "$STATE_DIR"
+[ -e "$DISABLE_FILE" ] && exit 0
+
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || exit 0
+fi
+
+if ! [[ "$FAIL_THRESHOLD" =~ ^[1-9][0-9]*$ ]]; then
+  log_message "Invalid FAIL_THRESHOLD: $FAIL_THRESHOLD"
+  exit 1
+fi
+
+if [ ! -r "$CONFIG_FILE" ]; then
+  log_message "WireProxy configuration is not readable: $CONFIG_FILE"
+  exit 1
+fi
+
+bind_address=$(awk -F '=' '
+  /^[[:space:]]*BindAddress[[:space:]]*=/ {
+    value=$2
+    gsub(/[[:space:]]/, "", value)
+    print value
+    exit
+  }
+' "$CONFIG_FILE")
+port=${bind_address##*:}
+port=${port//]/}
+
+if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+  log_message "Could not determine a valid SOCKS port from $CONFIG_FILE"
+  exit 1
+fi
+
+wireproxy_is_active() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl is-active --quiet wireproxy.service
+  else
+    rc-service wireproxy status >/dev/null 2>&1
+  fi
+}
+
+restart_wireproxy() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart wireproxy.service
+  else
+    rc-service wireproxy restart >/dev/null 2>&1
+  fi
+}
+
+check_warp() {
+  local output
+  local url
+  for url in \
+    https://www.cloudflare.com/cdn-cgi/trace \
+    https://1.1.1.1/cdn-cgi/trace
+  do
+    output=$(curl \
+      --fail \
+      --silent \
+      --show-error \
+      --connect-timeout 5 \
+      --max-time 12 \
+      --socks5-hostname "127.0.0.1:$port" \
+      "$url" 2>/dev/null) || continue
+    grep -Eq '^warp=(on|plus)$' <<< "$output" && return 0
+  done
+  return 1
+}
+
+reset_failures() {
+  printf '0\n' > "$FAIL_FILE"
+}
+
+if ! wireproxy_is_active; then
+  log_message "wireproxy service is inactive; restarting immediately"
+  restart_wireproxy
+  sleep 5
+  if check_warp; then
+    reset_failures
+    log_message "WireProxy recovered after service restart"
+    exit 0
+  fi
+  log_message "WireProxy is still unhealthy after service restart"
+  exit 1
+fi
+
+if check_warp; then
+  reset_failures
+  exit 0
+fi
+
+failures=0
+if [ -r "$FAIL_FILE" ]; then
+  read -r failures < "$FAIL_FILE" || failures=0
+fi
+[[ "$failures" =~ ^[0-9]+$ ]] || failures=0
+failures=$((failures + 1))
+printf '%s\n' "$failures" > "$FAIL_FILE"
+log_message "WARP SOCKS health check failed ($failures/$FAIL_THRESHOLD)"
+
+if [ "$failures" -lt "$FAIL_THRESHOLD" ]; then
+  exit 0
+fi
+
+log_message "Failure threshold reached; restarting wireproxy service"
+restart_wireproxy
+sleep 5
+
+if check_warp; then
+  reset_failures
+  log_message "WireProxy recovered and WARP SOCKS is healthy"
+  exit 0
+fi
+
+log_message "WireProxy restart completed, but WARP SOCKS remains unhealthy"
+exit 1
+WIREPROXY_WATCHDOG_EOF
+  chmod 755 /usr/local/sbin/warp-wireproxy-watchdog
+
+  if [ "$SYSTEM" = Alpine ]; then
+    mkdir -p /etc/crontabs
+    touch /etc/crontabs/root
+    sed -i '/# warp-wireproxy-watchdog$/d' /etc/crontabs/root
+    echo '* * * * * /usr/local/sbin/warp-wireproxy-watchdog # warp-wireproxy-watchdog' >> /etc/crontabs/root
+    rc-update add crond default >/dev/null 2>&1
+    rc-service crond restart >/dev/null 2>&1 || rc-service crond start >/dev/null 2>&1
+  else
+    cat > /etc/systemd/system/warp-wireproxy-watchdog.service <<'WIREPROXY_WATCHDOG_SERVICE_EOF'
+[Unit]
+Description=Health check and recovery for WARP WireProxy SOCKS
+After=network-online.target wireproxy.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=FAIL_THRESHOLD=2
+ExecStart=/usr/local/sbin/warp-wireproxy-watchdog
+WIREPROXY_WATCHDOG_SERVICE_EOF
+
+    cat > /etc/systemd/system/warp-wireproxy-watchdog.timer <<'WIREPROXY_WATCHDOG_TIMER_EOF'
+[Unit]
+Description=Run the WARP WireProxy watchdog regularly
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=30s
+RandomizedDelaySec=5s
+AccuracySec=1s
+Unit=warp-wireproxy-watchdog.service
+
+[Install]
+WantedBy=timers.target
+WIREPROXY_WATCHDOG_TIMER_EOF
+    systemctl daemon-reload >/dev/null 2>&1
+    systemctl enable --now warp-wireproxy-watchdog.timer >/dev/null 2>&1
+  fi
+
+  [ "$WIREPROXY_WAS_ACTIVE" = 1 ] && wireproxy_watchdog_resume
+}
+
 # WireProxy 开关，先检查是否已安装，再根据当前状态转向相反状态
 wireproxy_onoff() {
   local NO_OUTPUT="$1"
   [ ! -x "$(type -p wireproxy)" ] && error " $(text 122) " || IS_PUFFERFFISH=is_pufferffish
   if ss -nltp | awk '{print $NF}' | awk -F \" '{print $2}' | grep -q wireproxy; then
+    wireproxy_watchdog_pause
     [ "$SYSTEM" = Alpine ] && rc-service wireproxy stop >/dev/null 2>&1 || systemctl stop wireproxy
     [[ ! $(ss -nltp | awk '{print $NF}' | awk -F \" '{print $2}') =~ wireproxy ]] && info " $(text 123) "
   else
     local i=1; local j=5
+    wireproxy_watchdog_pause
     hint " $(text 11)\n $(text 12) "
     [ "$SYSTEM" = Alpine ] && rc-service wireproxy start >/dev/null 2>&1 || systemctl start wireproxy; sleep 1
     ip_case d wireproxy
@@ -1374,6 +1607,8 @@ wireproxy_onoff() {
         error " $(text 13) "
       fi
     done
+
+    wireproxy_watchdog_resume
 
     if [[ "$NO_OUTPUT" != 'no_output' && "$WIREPROXY_TRACE4$WIREPROXY_TRACE6" =~ on|plus ]]; then
       [[ $(ss -nltp | awk '{print $NF}' | awk -F \" '{print $2}') =~ wireproxy ]] && info " $(text 99)\n $(text 27): $WIREPROXY_SOCKS5\n WARP$WIREPROXY_ACCOUNT\n IPv4: $WIREPROXY_WAN4 $WIREPROXY_COUNTRY4 $WIREPROXY_ASNORG4\n IPv6: $WIREPROXY_WAN6 $WIREPROXY_COUNTRY6 $WIREPROXY_ASNORG6"
@@ -1869,8 +2104,8 @@ best_endpoint() {
 install() {
 
   # 后台下载 wireguard-go 两个版本
-  { wget --no-check-certificate $STACK -qO /tmp/wireguard-go-20230223 https://gitlab.com/fscarmen/warp/-/raw/main/wireguard-go/wireguard-go-linux-$ARCHITECTURE-20230223 && chmod +x /tmp/wireguard-go-20230223; }&
-  { wget --no-check-certificate $STACK -qO /tmp/wireguard-go-20201118 https://gitlab.com/fscarmen/warp/-/raw/main/wireguard-go/wireguard-go-linux-$ARCHITECTURE-20201118 && chmod +x /tmp/wireguard-go-20201118; }&
+  { wget --no-check-certificate $STACK -qO /tmp/wireguard-go-20230223 https://raw.githubusercontent.com/vruru/warp-selfheal/main/wireguard-go/wireguard-go-linux-$ARCHITECTURE-20230223 && chmod +x /tmp/wireguard-go-20230223; }&
+  { wget --no-check-certificate $STACK -qO /tmp/wireguard-go-20201118 https://raw.githubusercontent.com/vruru/warp-selfheal/main/wireguard-go/wireguard-go-linux-$ARCHITECTURE-20201118 && chmod +x /tmp/wireguard-go-20201118; }&
 
   # 根据之前判断的情况，让用户选择使用 wireguard 内核还是 wireguard-go serverd; 若为 wireproxy 方案则跳过此步
   if [ "$IS_PUFFERFFISH" != 'is_pufferffish' ]; then
@@ -1928,7 +2163,7 @@ install() {
       wireproxy_latest=$(wget --no-check-certificate -qO- -T1 -t1 $STACK "${GH_PROXY}https://api.github.com/repos/pufferffish/wireproxy/releases/latest" | awk -F [v\"] '/tag_name/{print $5; exit}')
       wireproxy_latest=${wireproxy_latest:-'1.0.9'}
       wget --no-check-certificate -T10 -t1 $STACK -O wireproxy.tar.gz ${GH_PROXY}https://github.com/pufferffish/wireproxy/releases/download/v"$wireproxy_latest"/wireproxy_linux_"$ARCHITECTURE".tar.gz ||
-      wget --no-check-certificate $STACK -O wireproxy.tar.gz https://gitlab.com/fscarmen/warp/-/raw/main/wireproxy/wireproxy_linux_"$ARCHITECTURE".tar.gz
+      wget --no-check-certificate $STACK -O wireproxy.tar.gz https://raw.githubusercontent.com/vruru/warp-selfheal/main/wireproxy/wireproxy_linux_"$ARCHITECTURE".tar.gz
       [ -x "$(type -p tar)" ] || ${PACKAGE_INSTALL[int]} tar 2>/dev/null || ( ${PACKAGE_UPDATE[int]}; ${PACKAGE_INSTALL[int]} tar 2>/dev/null )
       tar xzf wireproxy.tar.gz -C /usr/bin/; rm -f wireproxy.tar.gz
     fi
@@ -2061,7 +2296,7 @@ EOF
 
       # CentOS Stream 9 需要安装 resolvconf
       [[ "$SYSTEM" = CentOS && "$(expr "$SYS" : '.*\s\([0-9]\{1,\}\)\.*')" = 9 ]] && [ ! -x "$(type -p resolvconf)" ] &&
-      wget $STACK -P /usr/sbin ${GH_PROXY}https://github.com/fscarmen/warp/releases/download/resolvconf/resolvconf && chmod +x /usr/sbin/resolvconf
+      wget $STACK -P /usr/sbin ${GH_PROXY}https://raw.githubusercontent.com/vruru/warp-selfheal/main/vendor/openresolv/resolvconf && chmod +x /usr/sbin/resolvconf
       ;;
 
     Alpine )
@@ -2290,7 +2525,7 @@ EOF
 [Unit]
 Description=WireProxy for WARP
 After=network.target
-Documentation=https://github.com/fscarmen/warp-sh
+Documentation=https://github.com/vruru/warp-selfheal
 Documentation=https://github.com/pufferffish/wireproxy
 
 [Service]
@@ -2302,6 +2537,9 @@ Restart=always
 WantedBy=multi-user.target
 EOF
     fi
+
+    # 安装 WireProxy 数据面保活；已有运行实例会保持启用，新实例在连接成功后启用
+    wireproxy_watchdog_install
 
     # 保存好配置文件
     mv -f $0 /etc/wireguard/menu.sh >/dev/null 2>&1
@@ -2615,7 +2853,7 @@ menu_setting() {
 
         ACTION[3]() { OPTION=o; onoff; }
         ACTION[4]() { client_install; }; ACTION[5]() { change_ip; }; ACTION[6]() { uninstall; }; ACTION[7]() { bbrInstall; }; ACTION[8]() { ver; };
-        ACTION[9]() { bash <(curl -sSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh) -$L; };
+        ACTION[9]() { bash <(curl -sSL https://raw.githubusercontent.com/vruru/warp-selfheal/main/vendor/warp_unlock/unlock.sh) -$L; };
         ACTION[10]() { IS_ANEMONE=is_anemone ;install; };
         ACTION[11]() { IS_PUFFERFFISH=is_pufferffish; install; };
         ACTION[12]() { IS_LUBAN=is_luban; client_install; };
@@ -2643,7 +2881,7 @@ menu_setting() {
 
   ACTION[4]() { OPTION=o; onoff; }
   ACTION[5]() { client_install; }; ACTION[6]() { change_ip; }; ACTION[7]() { uninstall; }; ACTION[8]() { bbrInstall; }; ACTION[9]() { ver; };
-  ACTION[10]() { bash <(curl -sSL https://gitlab.com/fscarmen/warp_unlock/-/raw/main/unlock.sh) -$L; };
+  ACTION[10]() { bash <(curl -sSL https://raw.githubusercontent.com/vruru/warp-selfheal/main/vendor/warp_unlock/unlock.sh) -$L; };
   ACTION[11]() { IS_ANEMONE=is_anemone ;install; };
   ACTION[12]() { IS_PUFFERFFISH=is_pufferffish; install; };
   ACTION[13]() { IS_LUBAN=is_luban; client_install; };
@@ -2763,6 +3001,10 @@ case "$OPTION" in
     ;;
   y )
     wireproxy_onoff; exit 0
+    ;;
+  k )
+    [ -x "$(type -p wireproxy)" ] && wireproxy_watchdog_install
+    exit 0
 esac
 
 # 主程序运行 3/3
@@ -2770,6 +3012,12 @@ esac
 [[ "$OPTION" != "u" ]] && check_dependencies
 check_virt $SYSTEM
 check_system_info
+
+# 用派生版覆盖旧安装时，持久化本脚本并自动补齐或升级 WireProxy watchdog
+if [ -x "$(type -p wireproxy)" ]; then
+  selfheal_persist_menu
+  wireproxy_watchdog_install
+fi
 
 # 提前准备最佳 MTU
 [[ ${CLIENT} = 0 && ${WIREPROXY} = 0 && ! -s /etc/wireguard/warp.conf ]] && { best_mtu; }&
