@@ -1,47 +1,45 @@
-name: Cross compile WireProxy
+name: Test and build patched WireProxy
 
 on:
   workflow_dispatch:
-#  push:
-#    tags:
-#      - "v*"
+  push:
+    paths:
+      - "wireproxy/source/**"
+      - "wireproxy/build.sh"
+      - ".github/workflows/wireproxy.yml"
+  pull_request:
+    paths:
+      - "wireproxy/source/**"
+      - "wireproxy/build.sh"
+      - ".github/workflows/wireproxy.yml"
+
+permissions:
+  contents: read
 
 jobs:
-  WireProxy:
-
-    name: Cross compile WireProxy
-
-    runs-on: ubuntu-20.04
-
-    env:
-      workdir: ./WireProxy
-      VERSION: 1.0.3
-
+  test-and-build:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3.5.3
-        with:
-          fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Git clone WireProxy
-        run: |
-          git clone https://github.com/octeep/wireproxy.git ${{ env.workdir }}
-          cp ./.github/wireproxy-releaser.yml ${{ env.workdir }}/.goreleaser.yml
-      - name: Set up GoReleaser
-        uses: actions/setup-go@v4.0.1
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: "1.18"
+          go-version: "1.27.x"
+          cache-dependency-path: wireproxy/source/go.sum
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v4.3.0
+      - name: Test connection lifecycle
+        working-directory: wireproxy/source
+        run: go test -race ./...
+
+      - name: Cross-compile bundled archives
+        run: VERSION=1.1.3-selfheal.1 ./wireproxy/build.sh
+
+      - name: Upload archives
+        uses: actions/upload-artifact@v4
         with:
-          distribution: goreleaser
-          workdir: ${{ env.workdir }}
-          version: latest
-          args: release --clean
-          
-      - name: Release binaries
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: WireProxy_v${{ env.VERSION }}
-          files: ${{ env.workdir }}/dist/*.tar.gz
+          name: wireproxy-1.1.3-selfheal.1-linux
+          path: |
+            wireproxy/wireproxy_linux_*.tar.gz
+            wireproxy/SHA256SUMS

@@ -12,7 +12,7 @@
 wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && bash menu.sh
 ```
 
-安装 WireProxy 后，脚本会自动创建 watchdog；已有 WireProxy 安装执行一次上面的命令也会自动补齐。
+全新安装 WireProxy 时，脚本会校验并使用仓库内的 `v1.1.3-selfheal.1` 修复构建，同时自动创建 watchdog；旧版建议先卸载干净再重新安装，不执行自动二进制升级。修复版不靠内存超限重启：它会在 SOCKS 连接的一侧结束后继续放行仍在传输的数据，只有另一侧连续静默两分钟才清理孤儿连接，同时把单方向复制缓冲区从 256 KiB 降到 32 KiB。`GOMEMLIMIT=160MiB` 仅辅助 Go 主动回收堆，不会触发进程重启。watchdog 仍只在 WARP SOCKS 数据面连续检测失败时恢复服务。
 
 本仓库保留了上游完整历史和安装所需的 `api.sh`、WireProxy、wireguard-go、wgcf、warp-go、endpoint 等文件，并把脚本的运行时回源和自更新地址改为本仓库。原仓库中未包含但菜单会调用的 `warp_unlock` 与 `resolvconf` 也已连同各自许可证镜像到 [`vendor/`](vendor/README.md)；旧版 Docker 模式改为使用仓库内 Dockerfile 在本机生成镜像，不再拉取原作者镜像。因此原项目仓库下线后，已镜像的安装功能仍可从本仓库使用；Cloudflare API、系统软件源及第三方官方服务仍需联网。
 
@@ -36,7 +36,7 @@ wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && ba
 * * *
 
 ## 更新信息
-2026.08.28 menu.sh v3.2.7-selfheal.2 新增 WireProxy SOCKS 数据面自动保活，并将原项目运行时文件完整镜像到本仓库：定期验证 `warp=on/plus`，连续失败后自动重启 WireProxy；支持 systemd timer 和 Alpine cron，并完整处理手动开关、自更新与卸载。
+2026.08.28 menu.sh v3.2.7-selfheal.3 根治 WireProxy 长期运行的孤儿连接泄漏：仓库内保存完整的 v1.1.3 修复源码、回归测试与三架构构建；活跃的半关闭响应保持不断，静默孤儿连接才会被回收，不再使用内存阈值重启。保留 SOCKS 数据面自动保活及完整生命周期集成。
 
 2026.08.08 menu.sh v3.2.7 1. 优化 IPv6 路由规则，同网段地址均能正常访问; 2. 新增内置自动保活 —— 定时检测 WARP 接口状态，掉线后自动重新获取新的 WARP IP，避免网络中断
 

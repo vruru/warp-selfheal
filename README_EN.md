@@ -12,7 +12,7 @@ Install or upgrade the self-healing edition:
 wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && bash menu.sh
 ```
 
-The watchdog is installed automatically with WireProxy. Running the command once also upgrades an existing WireProxy installation.
+A fresh WireProxy installation verifies and uses the repository's patched `v1.1.3-selfheal.1` build and installs the watchdog automatically. Existing legacy installations should be removed cleanly before reinstalling; the script does not perform an automatic binary upgrade. The memory fix does not restart WireProxy at an RSS threshold. When one side of a SOCKS connection ends, traffic still flowing in the opposite direction is preserved; only a side that remains silent for two minutes is reclaimed. Per-direction copy buffers are reduced from 256 KiB to 32 KiB. `GOMEMLIMIT=160MiB` only encourages Go heap reclamation and never triggers a restart. The watchdog still recovers the service only after consecutive WARP SOCKS data-plane failures.
 
 This repository retains the complete upstream history and the runtime files used by installation, including `api.sh`, WireProxy, wireguard-go, wgcf, warp-go, and endpoint assets. Runtime fetches and self-updates now point to this repository. Dependencies previously fetched from separate original projects (`warp_unlock` and `resolvconf`) are mirrored with their licenses under [`vendor/`](vendor/README.md). The legacy Docker mode now builds its image locally from the repository's Dockerfile instead of pulling the original author's image. The mirrored installation paths therefore remain available if the original repository disappears; Cloudflare APIs, OS package repositories, and independent third-party services still require network access.
 
@@ -36,7 +36,7 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
-2026.08.28 menu.sh v3.2.7-selfheal.2 Add WireProxy SOCKS data-plane self-healing and mirror the original project's runtime files in this repository: periodically require `warp=on/plus`, restart WireProxy after consecutive failures, support systemd timers and Alpine cron, and integrate cleanly with manual switching, self-update, and uninstall.
+2026.08.28 menu.sh v3.2.7-selfheal.3 Fix the long-running WireProxy orphaned-connection leak at its source. The repository now contains the complete patched v1.1.3 source, regression tests, and three architecture builds. Active half-closed responses remain uninterrupted while silent orphaned connections are reclaimed, with no memory-threshold restart. SOCKS data-plane recovery and lifecycle integration remain included.
 
 2026.08.08 menu.sh v3.2.7 1. Optimize IPv6 routing rules — cover the whole /64 subnet; 2. Add built-in auto keepalive — periodically check the WARP interface and auto re-register a new IP when it drops, preventing network loss
 

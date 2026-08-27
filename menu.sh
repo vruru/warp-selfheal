@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-# Modified 2026-08-28: add automatic WireProxy SOCKS health checks and recovery.
-VERSION='3.2.7-selfheal.2'
+# Modified 2026-08-28: fix orphaned WireProxy SOCKS connections and add data-plane recovery.
+VERSION='3.2.7-selfheal.3'
 
 # 派生版自更新地址。
 SELFHEAL_RAW_URL='https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh'
@@ -1379,9 +1379,12 @@ wireproxy_watchdog_uninstall() {
   else
     systemctl disable --now warp-wireproxy-watchdog.timer >/dev/null 2>&1
     rm -f /etc/systemd/system/warp-wireproxy-watchdog.{service,timer}
+    rm -f /etc/systemd/system/wireproxy.service.d/10-warp-selfheal.conf
+    rmdir /etc/systemd/system/wireproxy.service.d >/dev/null 2>&1 || true
     systemctl daemon-reload >/dev/null 2>&1
     systemctl reset-failed warp-wireproxy-watchdog.service >/dev/null 2>&1
   fi
+  rm -f /etc/default/warp-wireproxy-watchdog
   rm -f /usr/local/sbin/warp-wireproxy-watchdog
   rm -rf /run/warp-wireproxy-watchdog
 }
@@ -1394,6 +1397,39 @@ selfheal_persist_menu() {
   ln -sf /etc/wireguard/menu.sh /usr/bin/warp
 }
 
+wireproxy_selfheal_expected_sha() {
+  case "$ARCHITECTURE" in
+    amd64 ) printf '%s\n' '8bf44d64f13ca9f93645ef84fb438ec2aae1f553f92e4dcbe232990d729c1044' ;;
+    arm64 ) printf '%s\n' '116ba868dcc27670c7f7d34419c88792a070c4d4c7762a08b3a9d1531db5742a' ;;
+    s390x ) printf '%s\n' '95a6f57c08ec6376e95103c372b9544e8f9c01a48cf479b42745a646d84b28b5' ;;
+    * ) return 1 ;;
+  esac
+}
+
+wireproxy_selfheal_download() {
+  local output=$1
+  local expected
+  local actual
+  local source_url="https://raw.githubusercontent.com/vruru/warp-selfheal/main/wireproxy/wireproxy_linux_${ARCHITECTURE}.tar.gz"
+
+  expected=$(wireproxy_selfheal_expected_sha) || return 1
+  wget --no-check-certificate -T30 -t3 $STACK -O "$output" "$source_url" ||
+    wget --no-check-certificate -T30 -t3 $STACK -O "$output" "${GH_PROXY}${source_url}" || return 1
+
+  actual=$(sha256sum "$output" 2>/dev/null | awk '{print $1}')
+  if [ "$actual" != "$expected" ]; then
+    rm -f "$output"
+    warning " WireProxy self-healing archive checksum mismatch "
+    return 1
+  fi
+
+  [ "$(tar -tzf "$output" 2>/dev/null)" = wireproxy ] || {
+    rm -f "$output"
+    warning " WireProxy self-healing archive has unexpected contents "
+    return 1
+  }
+}
+
 wireproxy_watchdog_install() {
   local WIREPROXY_WAS_ACTIVE=0
   if [ "$SYSTEM" = Alpine ]; then
@@ -1403,7 +1439,18 @@ wireproxy_watchdog_install() {
   fi
 
   wireproxy_watchdog_pause
-  mkdir -p /usr/local/sbin
+  mkdir -p /usr/local/sbin /etc/default
+  if [ ! -e /etc/default/warp-wireproxy-watchdog ]; then
+    cat > /etc/default/warp-wireproxy-watchdog <<'WIREPROXY_WATCHDOG_SETTINGS_EOF'
+# Consecutive failed SOCKS checks before restarting WireProxy.
+HEALTH_FAIL_THRESHOLD=2
+
+# Go runtime soft memory limit. This is supplementary to the connection leak
+# fix in the bundled WireProxy build and does not restart the process.
+GOMEMLIMIT=160MiB
+WIREPROXY_WATCHDOG_SETTINGS_EOF
+  fi
+
   cat > /usr/local/sbin/warp-wireproxy-watchdog <<'WIREPROXY_WATCHDOG_EOF'
 #!/usr/bin/env bash
 
@@ -1415,7 +1462,10 @@ FAIL_FILE="$STATE_DIR/failures"
 LOCK_FILE="$STATE_DIR/lock"
 DISABLE_FILE="$STATE_DIR/disabled"
 CONFIG_FILE=/etc/wireguard/proxy.conf
-FAIL_THRESHOLD="${FAIL_THRESHOLD:-2}"
+SETTINGS_FILE=/etc/default/warp-wireproxy-watchdog
+
+[ -r "$SETTINGS_FILE" ] && . "$SETTINGS_FILE"
+HEALTH_FAIL_THRESHOLD="${HEALTH_FAIL_THRESHOLD:-${FAIL_THRESHOLD:-2}}"
 
 log_message() {
   logger -t warp-wireproxy-watchdog -- "$*"
@@ -1429,8 +1479,8 @@ if command -v flock >/dev/null 2>&1; then
   flock -n 9 || exit 0
 fi
 
-if ! [[ "$FAIL_THRESHOLD" =~ ^[1-9][0-9]*$ ]]; then
-  log_message "Invalid FAIL_THRESHOLD: $FAIL_THRESHOLD"
+if ! [[ "$HEALTH_FAIL_THRESHOLD" =~ ^[1-9][0-9]*$ ]]; then
+  log_message "Invalid HEALTH_FAIL_THRESHOLD: $HEALTH_FAIL_THRESHOLD"
   exit 1
 fi
 
@@ -1520,9 +1570,9 @@ fi
 [[ "$failures" =~ ^[0-9]+$ ]] || failures=0
 failures=$((failures + 1))
 printf '%s\n' "$failures" > "$FAIL_FILE"
-log_message "WARP SOCKS health check failed ($failures/$FAIL_THRESHOLD)"
+log_message "WARP SOCKS health check failed ($failures/$HEALTH_FAIL_THRESHOLD)"
 
-if [ "$failures" -lt "$FAIL_THRESHOLD" ]; then
+if [ "$failures" -lt "$HEALTH_FAIL_THRESHOLD" ]; then
   exit 0
 fi
 
@@ -1542,6 +1592,9 @@ WIREPROXY_WATCHDOG_EOF
   chmod 755 /usr/local/sbin/warp-wireproxy-watchdog
 
   if [ "$SYSTEM" = Alpine ]; then
+    if [ -f /etc/init.d/wireproxy ] && ! grep -q 'GOMEMLIMIT' /etc/init.d/wireproxy; then
+      sed -i '2i export GOMEMLIMIT="${GOMEMLIMIT:-160MiB}"' /etc/init.d/wireproxy
+    fi
     mkdir -p /etc/crontabs
     touch /etc/crontabs/root
     sed -i '/# warp-wireproxy-watchdog$/d' /etc/crontabs/root
@@ -1557,7 +1610,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-Environment=FAIL_THRESHOLD=2
+EnvironmentFile=-/etc/default/warp-wireproxy-watchdog
 ExecStart=/usr/local/sbin/warp-wireproxy-watchdog
 WIREPROXY_WATCHDOG_SERVICE_EOF
 
@@ -1575,6 +1628,19 @@ Unit=warp-wireproxy-watchdog.service
 [Install]
 WantedBy=timers.target
 WIREPROXY_WATCHDOG_TIMER_EOF
+
+    mkdir -p /etc/systemd/system/wireproxy.service.d
+    cat > /etc/systemd/system/wireproxy.service.d/10-warp-selfheal.conf <<'WIREPROXY_MEMORY_LIMIT_EOF'
+[Unit]
+StartLimitIntervalSec=0
+
+[Service]
+RemainAfterExit=no
+Restart=always
+RestartSec=3s
+EnvironmentFile=-/etc/default/warp-wireproxy-watchdog
+MemoryAccounting=true
+WIREPROXY_MEMORY_LIMIT_EOF
     systemctl daemon-reload >/dev/null 2>&1
     systemctl enable --now warp-wireproxy-watchdog.timer >/dev/null 2>&1
   fi
@@ -2158,12 +2224,9 @@ install() {
 
   # 注册 WARP 账户 (将生成 warp-account.conf 文件保存账户信息)
   {
-    # 如安装 WireProxy ，尽量下载官方的最新版本，如官方 WireProxy 下载不成功，将使用 cdn，以更好的支持双栈和大陆 VPS。并添加执行权限
+    # WireProxy 优先使用本仓库包含连接泄漏修复的构建；失败时才回退到官方版本。
     if [ "$IS_PUFFERFFISH" = 'is_pufferffish' ]; then
-      wireproxy_latest=$(wget --no-check-certificate -qO- -T1 -t1 $STACK "${GH_PROXY}https://api.github.com/repos/pufferffish/wireproxy/releases/latest" | awk -F [v\"] '/tag_name/{print $5; exit}')
-      wireproxy_latest=${wireproxy_latest:-'1.0.9'}
-      wget --no-check-certificate -T10 -t1 $STACK -O wireproxy.tar.gz ${GH_PROXY}https://github.com/pufferffish/wireproxy/releases/download/v"$wireproxy_latest"/wireproxy_linux_"$ARCHITECTURE".tar.gz ||
-      wget --no-check-certificate $STACK -O wireproxy.tar.gz https://raw.githubusercontent.com/vruru/warp-selfheal/main/wireproxy/wireproxy_linux_"$ARCHITECTURE".tar.gz
+      wireproxy_selfheal_download wireproxy.tar.gz || error " Unable to download and verify the patched WireProxy build "
       [ -x "$(type -p tar)" ] || ${PACKAGE_INSTALL[int]} tar 2>/dev/null || ( ${PACKAGE_UPDATE[int]}; ${PACKAGE_INSTALL[int]} tar 2>/dev/null )
       tar xzf wireproxy.tar.gz -C /usr/bin/; rm -f wireproxy.tar.gz
     fi
@@ -2513,6 +2576,8 @@ EOF
       cat > /etc/init.d/wireproxy << EOF
 #!/sbin/openrc-run
 
+export GOMEMLIMIT="${GOMEMLIMIT:-160MiB}"
+
 description="WireProxy for WARP"
 command="/usr/bin/wireproxy"
 command_args="-c /etc/wireguard/proxy.conf"
@@ -2530,8 +2595,8 @@ Documentation=https://github.com/pufferffish/wireproxy
 
 [Service]
 ExecStart=/usr/bin/wireproxy -c /etc/wireguard/proxy.conf
-RemainAfterExit=yes
 Restart=always
+RestartSec=3s
 
 [Install]
 WantedBy=multi-user.target
