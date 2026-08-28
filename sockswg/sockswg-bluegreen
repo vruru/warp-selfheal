@@ -582,8 +582,11 @@ check() {
   health_b >/dev/null && b_ok=1 || true
   [ "$a_ok" = 1 ] && a_ip=$(public_ip_a || true) || a_ip=
   [ "$b_ok" = 1 ] && b_ip=$(public_ip_b || true) || b_ip=
-  [ "$b_ok" = 1 ] && { [ -z "$a_ip" ] || [ "$b_ip" != "$a_ip" ]; } && b_candidate_ok=1 || true
-  [ "$a_ok" = 1 ] && { [ -z "$b_ip" ] || [ "$a_ip" != "$b_ip" ]; } && a_candidate_ok=1 || true
+  # Automatic repair is health-driven only. Egress diversity and an optimal
+  # Google region are reported for manual optimization, but never justify
+  # rebuilding an otherwise healthy inactive slot.
+  [ "$b_ok" = 1 ] && b_candidate_ok=1 || true
+  [ "$a_ok" = 1 ] && a_candidate_ok=1 || true
 
   if [ "$active" = a ]; then
     if [ "$b_candidate_ok" = 1 ]; then

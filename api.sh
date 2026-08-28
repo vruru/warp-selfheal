@@ -402,8 +402,12 @@ register_account() {
   fi
 
   if grep -q . <<<"$PRIVATE_KEY" && grep -q . <<<"$PUBLIC_KEY"; then
-    INSTALL_ID=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 22)
-    FCM_TOKEN="${INSTALL_ID}:APA91b$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 134)"
+    # Use a finite random input before filtering. The old infinite
+    # `tr /dev/urandom | head` pipeline made tr exit on SIGPIPE and aborted
+    # registration when the caller enabled pipefail.
+    RANDOM_POOL=$(head -c 256 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+    INSTALL_ID=${RANDOM_POOL:0:22}
+    FCM_TOKEN="${INSTALL_ID}:APA91b${RANDOM_POOL:22:134}"
 
     until grep -q 'account' <<<"$ACCOUNT"; do
       [ "$ACCOUNT" = 'error code: 1015' ] && sleep 10
