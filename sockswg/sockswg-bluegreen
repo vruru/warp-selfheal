@@ -184,6 +184,20 @@ a_drain_complete() {
     [ $((now - switched)) -ge "$DRAIN_MIN_SECONDS" ]
 }
 
+b_connection_count() {
+  ip netns exec "$NS_B" ss -Hntp state established 2>/dev/null |
+    awk '/users:\(\("(danted|microsocks)"/ {count++} END {print count+0}'
+}
+
+b_drain_complete() {
+  local count switched now
+  count=$(b_connection_count)
+  switched=$(cat "$BASE_DIR/switched-to-a-at" 2>/dev/null || printf 0)
+  now=$(date +%s)
+  [ "$count" -le "$DRAIN_CONNECTION_THRESHOLD" ] && \
+    [ $((now - switched)) -ge "$DRAIN_MIN_SECONDS" ]
+}
+
 iptables_add_once() {
   local table=$1
   shift
@@ -256,6 +270,7 @@ switch_a() {
   delete_selector_rules
   printf 'a\n' > "$ACTIVE_FILE"
   rm -f "$BASE_DIR/switched-to-b-at"
+  date +%s > "$BASE_DIR/switched-to-a-at"
   log 'active slot is now A; established B connections are draining'
 }
 
@@ -274,6 +289,7 @@ switch_b() {
     -m comment --comment "$SELECTOR_COMMENT" \
     -j DNAT --to-destination "$NS_IP:$BACKEND_B_PORT"
   printf 'b\n' > "$ACTIVE_FILE"
+  rm -f "$BASE_DIR/switched-to-a-at"
   date +%s > "$BASE_DIR/switched-to-b-at"
   log 'active slot is now B; established A connections are draining'
 }
@@ -453,7 +469,8 @@ refresh_b() {
     refresh_b_once && return 0
     [ "$i" = "$attempts" ] || sleep 10
   done
-  die "no qualified B peer was found after $attempts attempts"
+  log "no qualified B peer was found after $attempts attempts"
+  return 1
 }
 
 reroll_b() {
@@ -536,7 +553,8 @@ refresh_a() {
     refresh_a_once && return 0
     [ "$i" = "$attempts" ] || sleep 10
   done
-  die "no qualified A peer was found after $attempts attempts"
+  log "no qualified A peer was found after $attempts attempts"
+  return 1
 }
 
 reroll_a() {
@@ -624,6 +642,13 @@ check() {
     fi
     if [ "$a_ok" = 1 ]; then
       counter_set a_fail 0
+      if [ "$b_ok" = 1 ] && b_drain_complete && rotation_due b; then
+        mark_rotation b
+        if [ "$(assess_quality b 2>/dev/null || printf unavailable)" != optimal ]; then
+          log 'inactive B is healthy but not optimal; starting the hourly IP selection round'
+          repair_b || log 'inactive B did not find a better qualified IP in this hourly round'
+        fi
+      fi
       exit 0
     fi
     failures=$(( $(counter_get a_fail) + 1 ))
@@ -653,6 +678,13 @@ check() {
       exit 0
     fi
     counter_set b_fail 0
+    if [ "$a_ok" = 1 ] && a_drain_complete && rotation_due a; then
+      mark_rotation a
+      if [ "$(assess_quality a 2>/dev/null || printf unavailable)" != optimal ]; then
+        log 'inactive A is healthy but not optimal; starting the hourly IP selection round'
+        repair_a || log 'inactive A did not find a better qualified IP in this hourly round'
+      fi
+    fi
     # A and B are peers. Keep a healthy active B indefinitely; a recovered A
     # stays idle and is used only if B later fails.
     counter_set a_recover 0
