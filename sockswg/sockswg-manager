@@ -13,6 +13,7 @@ BACKEND_FILE=$CONFIG_DIR/backend
 TABLE_ID=51821
 RULE_PRIORITY=10020
 DEFAULT_PORT=40000
+ENDPOINT_PORTS="2408 4500 500 1701"
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 die() { printf 'sockswg: %s\n' "$*" >&2; exit 1; }
@@ -268,6 +269,29 @@ health_check_retry() {
   return 1
 }
 
+health_check_with_endpoint_failover() {
+  local port=$1 endpoint endpoint_host original_port candidate
+  health_check_retry "$port" && return 0
+
+  endpoint=$(awk '/^[[:space:]]*Endpoint[[:space:]]*=/{print $NF; exit}' "$WG_CONFIG")
+  endpoint_host=${endpoint%:*}
+  original_port=${endpoint##*:}
+  [ -n "$endpoint_host" ] && [[ "$original_port" =~ ^[0-9]+$ ]] || return 1
+
+  for candidate in $ENDPOINT_PORTS; do
+    [ "$candidate" = "$original_port" ] && continue
+    info "temporary validation failed on UDP $original_port; trying UDP $candidate"
+    sed -i -E "s#^(Endpoint = .*:)[0-9]+#\\1$candidate#" "$WG_CONFIG"
+    systemctl restart wg-quick@sockswg.service
+    systemctl restart sockswg.service
+    wait_for_proxy "$port"
+    health_check_retry "$port" && return 0
+  done
+
+  sed -i -E "s#^(Endpoint = .*:)[0-9]+#\\1$original_port#" "$WG_CONFIG"
+  return 1
+}
+
 wait_for_proxy() {
   local port=$1 i
   for i in $(seq 1 20); do
@@ -300,7 +324,7 @@ install_stack() {
   write_configs "$port"
   write_units
   start_stack
-  if health_check_retry "$port"; then
+  if health_check_with_endpoint_failover "$port"; then
     resume_watchdog
     info "healthy on 127.0.0.1:$port"
   else
@@ -343,7 +367,10 @@ migrate_wireproxy() {
   info "validating in parallel on 127.0.0.1:$temporary_port"
   install_stack "$temporary_port"
   pause_watchdog
-  stop_stack
+  # Keep the already validated WireGuard handshake warm during the port
+  # cutover. Only stop the SOCKS listener so a burst of reconnecting clients
+  # cannot race a fresh tunnel handshake.
+  systemctl stop sockswg.service >/dev/null 2>&1 || true
 
   install -d -m 755 /run/warp-wireproxy-watchdog
   : > /run/warp-wireproxy-watchdog/disabled

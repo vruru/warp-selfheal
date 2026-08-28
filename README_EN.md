@@ -47,6 +47,8 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
+2026.08.28 menu.sh v3.2.7-selfheal.8 Harden bulk migration. Temporary-port validation now tries every official Endpoint port, and the final SOCKS port cutover keeps the already validated WireGuard handshake warm. Only the SOCKS listener is switched, preventing a reconnect burst from racing a cold tunnel start.
+
 2026.08.28 menu.sh v3.2.7-selfheal.7 Add a Debian 13 compatibility backend. When `dante-server` is unavailable, the installer uses MicroSocks under a dedicated `sockswg-proxy` system user and adds UID policy rules for both IPv4 and IPv6 without changing the host default route.
 
 2026.08.28 menu.sh v3.2.7-selfheal.6 Add `sockswg`, combining kernel WireGuard WARP with a loopback-only Dante SOCKS5 proxy. Existing Soga-style SOCKS routing remains unchanged while the single-process userspace WireProxy data plane is bypassed. Migration performs dual-stack validation on a temporary port with automatic rollback, and the watchdog provides service recovery, per-stack checks, and Endpoint failover.

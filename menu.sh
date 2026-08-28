@@ -2,7 +2,7 @@
 
 # 当前脚本版本号
 # Modified 2026-08-28: add per-stack recovery and automatic official Endpoint port failover.
-VERSION='3.2.7-selfheal.7'
+VERSION='3.2.7-selfheal.8'
 
 # 派生版自更新地址。
 SELFHEAL_RAW_URL='https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh'

@@ -47,6 +47,8 @@ warp q       # 开关 sockswg
 * * *
 
 ## 更新信息
+2026.08.28 menu.sh v3.2.7-selfheal.8 强化批量迁移：临时端口预检也会自动尝试全部官方 Endpoint 端口；正式接管原 SOCKS 端口时保留已验证并完成握手的 WireGuard 网卡，只切换 SOCKS 监听，避免大量 Soga 连接同时重连时与隧道冷启动竞争。
+
 2026.08.28 menu.sh v3.2.7-selfheal.7 增加 Debian 13 兼容后端：若系统源没有 `dante-server`，自动安装 MicroSocks，并用独立的 `sockswg-proxy` 系统用户和 UID 策略路由确保 IPv4/IPv6 出站只进入 `sockswg`，主机默认路由不变。
 
 2026.08.28 menu.sh v3.2.7-selfheal.6 新增 `sockswg`：使用内核 WireGuard 承载 WARP，由 Dante 在本机提供 SOCKS5，保留 Soga 等应用既有的按规则 SOCKS 分流，同时绕开 WireProxy 单进程用户态数据面的性能上限。迁移采用临时端口双栈预检、失败自动回滚；独立 watchdog 支持服务拉起、IPv4/IPv6 分栈检测和官方 UDP Endpoint 轮换。
