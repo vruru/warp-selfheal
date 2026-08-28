@@ -25,13 +25,13 @@ warp q       # toggle sockswg
 
 Migration validates both WARP IPv4 and IPv6 on a temporary port before taking over the original SOCKS port. Any failure restores WireProxy automatically. The independent watchdog checks both stacks every 30 seconds, reconstructs an inactive service/interface immediately, and rotates through the official UDP Endpoint ports after two consecutive data-plane failures. Installation supports Debian/Ubuntu systemd hosts; Debian 12 prefers Dante, while Debian 13 automatically uses MicroSocks with dedicated-UID policy routing when Dante is unavailable.
 
-#### sockswg IPv4 blue/green disaster recovery (Debian 12/Dante pilot)
+#### sockswg IPv4 blue/green disaster recovery (Debian 12/Dante and Debian 13/MicroSocks)
 
 `sockswg-bluegreen` runs two equal A/B tunnels on the same VPS, with the pure-IPv4 B tunnel isolated in a network namespace. Installation auto-detects and stores the expected location from the initial A path. An iptables connection-tracking selector moves only new SOCKS connections; established TCP connections keep using their original tunnel and drain naturally. Both paths are checked every 20 seconds for Cloudflare location, `warp=on/plus`, and Google HTTP status. Two consecutive failures of the active slot trigger a switch. The newly active slot remains in use for as long as it stays healthy; a repaired former slot stays idle with no automatic failback.
 
 When the inactive slot is unsuitable, the manager first cycles Endpoints and reconnects the existing peer. Qualification checks location, rejects Google `429`, and prefers an egress different from the active slot. Only after repeated reroll failures does it unregister and create a candidate peer; rejected candidates are unregistered and the previous configuration is restored. Candidates also record the Google/YouTube region: matching the host's WARP location is `optimal`, while a reachable but different Google region (including `.com.hk`) is `usable`; both tiers remain eligible for disaster recovery. Cloudflare still assigns the public egress, so blue/green improves availability but cannot guarantee a permanently fixed or unlimited supply of different WARP IPs.
 
-The pilot currently supports an existing Debian 12/Dante `sockswg` installation and is not installed by `warp p` by default. Do not deploy it broadly to Debian 13/MicroSocks hosts until that backend has been implemented and independently verified.
+The pilot supports existing Debian 12/Dante and Debian 13/MicroSocks `sockswg` installations. It detects the current `sockswg.service` backend automatically; the MicroSocks B slot runs unprivileged inside its isolated network namespace. It is not installed by `warp p` by default.
 
 ```bash
 wget -qO /usr/local/sbin/sockswg-bluegreen https://raw.githubusercontent.com/vruru/warp-selfheal/main/sockswg/sockswg-bluegreen
@@ -63,7 +63,7 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
-2026.08.29 sockswg-bluegreen pilot: add equal IPv4-only A/B WARP disaster-recovery slots on one VPS. The active slot changes only after consecutive health failures and never automatically fails back; whichever slot is healthy remains active. The idle tunnel runs in an isolated network namespace; switching affects only new connections while established connections drain. Qualification checks region, WARP status, and Google non-`429` responses. An inactive slot first cycles Endpoints and reconnects its existing peer, using new peer registration only as a fallback. This is currently verified only on Debian 12/Dante and is not installed by `warp p` by default.
+2026.08.29 sockswg-bluegreen pilot: add equal IPv4-only A/B WARP disaster-recovery slots on one VPS. The active slot changes only after consecutive health failures and never automatically fails back; whichever slot is healthy remains active. The idle tunnel runs in an isolated network namespace; switching affects only new connections while established connections drain. Qualification checks region, WARP status, and Google non-`429` responses. An inactive slot first cycles Endpoints and reconnects its existing peer, using new peer registration only as a fallback. Slot B automatically supports Debian 12/Dante and Debian 13/MicroSocks and is not installed by `warp p` by default.
 
 2026.08.29 menu.sh v3.2.7-selfheal.9 Fix the Debian 12/Dante integration with Soga. Soga can bind the VPS native address when dialing the loopback SOCKS listener, while the old Dante policy admitted only `127.0.0.1/32` and reset the SOCKS handshake. The listener remains loopback-only and is not exposed publicly, but locally originated connections may now use any local source address.
 

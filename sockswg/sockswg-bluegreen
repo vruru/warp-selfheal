@@ -38,6 +38,20 @@ DRAIN_MIN_SECONDS=120
 DRAIN_CONNECTION_THRESHOLD=20
 [ -r "$SETTINGS_FILE" ] && . "$SETTINGS_FILE"
 
+proxy_backend() {
+  if systemctl cat sockswg.service 2>/dev/null | grep -q '/microsocks'; then
+    printf 'microsocks\n'
+  elif systemctl cat sockswg.service 2>/dev/null | grep -q '/danted'; then
+    printf 'dante\n'
+  elif command -v danted >/dev/null 2>&1; then
+    printf 'dante\n'
+  elif command -v microsocks >/dev/null 2>&1; then
+    printf 'microsocks\n'
+  else
+    return 1
+  fi
+}
+
 log() {
   printf 'sockswg-bluegreen: %s\n' "$*"
   logger -t sockswg-bluegreen -- "$*" 2>/dev/null || true
@@ -80,12 +94,18 @@ ensure_account_b() {
 }
 
 write_b_config() {
-  local account=${1:-$ACCOUNT_B}
+  local account=${1:-$ACCOUNT_B} backend
   local private_key
   private_key=$(account_value private_key "$account")
   [ -n "$private_key" ] || die 'slot B WARP private key is missing'
   printf '%s\n' "$private_key" > "$PRIVATE_KEY_B"
   chmod 600 "$PRIVATE_KEY_B"
+
+  backend=$(proxy_backend) || die 'neither Dante nor MicroSocks is available'
+  if [ "$backend" = microsocks ]; then
+    rm -f "$SOCKD_B"
+    return 0
+  fi
 
   cat > "$SOCKD_B" <<EOF
 logoutput: stderr
@@ -152,7 +172,7 @@ set_a_endpoint() {
 
 a_connection_count() {
   ss -Hntp state established 2>/dev/null |
-    awk '/users:\(\("danted"/ {count++} END {print count+0}'
+    awk '/users:\(\("(danted|microsocks)"/ {count++} END {print count+0}'
 }
 
 a_drain_complete() {
@@ -667,16 +687,24 @@ status() {
 }
 
 write_units() {
-  cat > /etc/systemd/system/sockswg-bluegreen-b.service <<'EOF'
+  local backend exec_start
+  backend=$(proxy_backend) || die 'neither Dante nor MicroSocks is available'
+  if [ "$backend" = dante ]; then
+    exec_start='/usr/bin/ip netns exec sockswg-b /usr/sbin/danted -f /etc/sockswg-bluegreen/sockd-b.conf'
+  else
+    command -v setpriv >/dev/null || die 'setpriv is required for the MicroSocks backend'
+    exec_start='/usr/bin/ip netns exec sockswg-b /usr/bin/setpriv --reuid=nobody --regid=nogroup --clear-groups /usr/bin/microsocks -q -i 10.203.2.2 -p 40002'
+  fi
+  cat > /etc/systemd/system/sockswg-bluegreen-b.service <<EOF
 [Unit]
-Description=sockswg blue/green WARP tunnel B
+Description=sockswg blue/green WARP tunnel B ($backend backend)
 After=network-online.target sockswg.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStartPre=/usr/local/sbin/sockswg-bluegreen prepare-b
-ExecStart=/usr/bin/ip netns exec sockswg-b /usr/sbin/danted -f /etc/sockswg-bluegreen/sockd-b.conf
+ExecStart=$exec_start
 ExecStopPost=-/usr/local/sbin/sockswg-bluegreen cleanup-b
 Restart=always
 RestartSec=5s
@@ -750,7 +778,7 @@ EOF
 
 install_all() {
   require_root
-  command -v danted >/dev/null || die 'danted is required'
+  proxy_backend >/dev/null || die 'an existing Dante or MicroSocks sockswg backend is required'
   command -v iptables >/dev/null || die 'iptables is required'
   install -d -m 700 "$BASE_DIR" "$(dirname "$API_SCRIPT")"
   if ! id -u "$CHECK_USER" >/dev/null 2>&1; then
