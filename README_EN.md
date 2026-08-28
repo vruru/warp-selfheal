@@ -25,6 +25,22 @@ warp q       # toggle sockswg
 
 Migration validates both WARP IPv4 and IPv6 on a temporary port before taking over the original SOCKS port. Any failure restores WireProxy automatically. The independent watchdog checks both stacks every 30 seconds, reconstructs an inactive service/interface immediately, and rotates through the official UDP Endpoint ports after two consecutive data-plane failures. Installation supports Debian/Ubuntu systemd hosts; Debian 12 prefers Dante, while Debian 13 automatically uses MicroSocks with dedicated-UID policy routing when Dante is unavailable.
 
+#### sockswg IPv4 blue/green disaster recovery (Debian 12/Dante pilot)
+
+`sockswg-bluegreen` keeps the current A tunnel and runs a pure-IPv4 B tunnel in an isolated network namespace on the same VPS. An iptables connection-tracking selector moves only new SOCKS connections; established TCP connections keep using their original tunnel and drain naturally. Both paths are checked every 20 seconds for Cloudflare location, `warp=on/plus`, and Google HTTP status. Two consecutive active-path failures trigger failover, and the preferred A path must pass twice before failback.
+
+When the inactive slot is unsuitable, the manager first cycles Endpoints and reconnects the existing peer. Qualification checks location, rejects Google `429`, and prefers an egress different from the active slot. Only after repeated reroll failures does it unregister and create a candidate peer; rejected candidates are unregistered and the previous configuration is restored. Cloudflare still assigns the public egress, so blue/green improves availability but cannot guarantee a permanently fixed or unlimited supply of different WARP IPs.
+
+The pilot currently supports an existing Debian 12/Dante `sockswg` installation and is not installed by `warp p` by default. Do not deploy it broadly to Debian 13/MicroSocks hosts until that backend has been implemented and independently verified.
+
+```bash
+wget -qO /usr/local/sbin/sockswg-bluegreen https://raw.githubusercontent.com/vruru/warp-selfheal/main/sockswg/sockswg-bluegreen
+wget -qO /usr/local/lib/warp-selfheal/api.sh https://raw.githubusercontent.com/vruru/warp-selfheal/main/api.sh
+chmod 755 /usr/local/sbin/sockswg-bluegreen /usr/local/lib/warp-selfheal/api.sh
+sockswg-bluegreen install
+sockswg-bluegreen status
+```
+
 This repository retains the complete upstream history and the runtime files used by installation, including `api.sh`, WireProxy, wireguard-go, wgcf, warp-go, and endpoint assets. Runtime fetches and self-updates now point to this repository. Dependencies previously fetched from separate original projects (`warp_unlock` and `resolvconf`) are mirrored with their licenses under [`vendor/`](vendor/README.md). The legacy Docker mode now builds its image locally from the repository's Dockerfile instead of pulling the original author's image. The mirrored installation paths therefore remain available if the original repository disappears; Cloudflare APIs, OS package repositories, and independent third-party services still require network access.
 
 * * *
@@ -47,6 +63,8 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
+2026.08.29 sockswg-bluegreen pilot: add IPv4-only A/B WARP disaster recovery on one VPS. The standby runs in an isolated network namespace; switching affects only new connections while established connections drain. Qualification checks region, WARP status, and Google non-`429` responses. An inactive slot first cycles Endpoints and reconnects its existing peer, using new peer registration only as a fallback. This is currently verified only on Debian 12/Dante and is not installed by `warp p` by default.
+
 2026.08.29 menu.sh v3.2.7-selfheal.9 Fix the Debian 12/Dante integration with Soga. Soga can bind the VPS native address when dialing the loopback SOCKS listener, while the old Dante policy admitted only `127.0.0.1/32` and reset the SOCKS handshake. The listener remains loopback-only and is not exposed publicly, but locally originated connections may now use any local source address.
 
 2026.08.28 menu.sh v3.2.7-selfheal.8 Harden bulk migration. Temporary-port validation now tries every official Endpoint port, and the final SOCKS port cutover keeps the already validated WireGuard handshake warm. Only the SOCKS listener is switched, preventing a reconnect burst from racing a cold tunnel start.

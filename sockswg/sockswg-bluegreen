@@ -1,0 +1,717 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BASE_DIR=${BASE_DIR:-/etc/sockswg-bluegreen}
+STATE_DIR=${STATE_DIR:-/run/sockswg-bluegreen}
+ACCOUNT_B=$BASE_DIR/account-b.json
+ACCOUNT_A=$BASE_DIR/account-a.json
+PRIVATE_KEY_B=$BASE_DIR/private-b.key
+SOCKD_B=$BASE_DIR/sockd-b.conf
+API_SCRIPT=${API_SCRIPT:-/usr/local/lib/warp-selfheal/api.sh}
+ACTIVE_FILE=$BASE_DIR/active
+SETTINGS_FILE=${SETTINGS_FILE:-/etc/default/sockswg-bluegreen}
+
+NS_B=sockswg-b
+VETH_HOST=swgb-host
+VETH_NS=swgb-ns
+HOST_ADDR=10.203.2.1/30
+HOST_IP=10.203.2.1
+NS_ADDR=10.203.2.2/30
+NS_IP=10.203.2.2
+WARP4=172.16.0.2/32
+TABLE_B=51822
+FRONT_PORT=40000
+BACKEND_B_PORT=40002
+CHECK_USER=sockswg-bgcheck
+SELECTOR_COMMENT=sockswg-bluegreen-b
+WARP_PEER_KEY='bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo='
+WARP_ENDPOINT='162.159.192.1:2408'
+ENDPOINT_B_FILE=$BASE_DIR/endpoint-b
+ENDPOINT_CANDIDATES='162.159.192.1:2408 162.159.192.1:4500 162.159.192.1:1701 162.159.192.1:500 162.159.192.6:2408 162.159.192.1:2408'
+
+DESIRED_LOC=JP
+FAIL_THRESHOLD=2
+RECOVER_THRESHOLD=2
+PREFER_A=yes
+ROTATE_INTERVAL=300
+CANDIDATE_FAIL_THRESHOLD=3
+DRAIN_MIN_SECONDS=120
+DRAIN_CONNECTION_THRESHOLD=20
+[ -r "$SETTINGS_FILE" ] && . "$SETTINGS_FILE"
+
+log() {
+  printf 'sockswg-bluegreen: %s\n' "$*"
+  logger -t sockswg-bluegreen -- "$*" 2>/dev/null || true
+}
+
+die() {
+  log "$*" >&2
+  exit 1
+}
+
+require_root() {
+  [ "$(id -u)" = 0 ] || die 'must be run as root'
+}
+
+account_value() {
+  local key=$1
+  local file=${2:-$ACCOUNT_B}
+  awk -F '"' -v key="$key" '$2 == key {print $4; exit}' "$file"
+}
+
+register_account() {
+  local file=$1
+  [ -x "$API_SCRIPT" ] || die "registration helper is missing: $API_SCRIPT"
+  "$API_SCRIPT" --file "$file" --register >/dev/null
+  chmod 600 "$file"
+}
+
+cancel_account() {
+  local file=$1
+  [ -s "$file" ] || return 0
+  "$API_SCRIPT" --file "$file" --cancle >/dev/null 2>&1 || \
+    log "warning: could not unregister retired peer recorded in $file"
+}
+
+ensure_account_b() {
+  [ -s "$ACCOUNT_B" ] && return 0
+  [ -x "$API_SCRIPT" ] || die "registration helper is missing: $API_SCRIPT"
+  log 'registering an independent standby WARP peer'
+  register_account "$ACCOUNT_B"
+}
+
+write_b_config() {
+  local account=${1:-$ACCOUNT_B}
+  local private_key
+  private_key=$(account_value private_key "$account")
+  [ -n "$private_key" ] || die 'standby WARP private key is missing'
+  printf '%s\n' "$private_key" > "$PRIVATE_KEY_B"
+  chmod 600 "$PRIVATE_KEY_B"
+
+  cat > "$SOCKD_B" <<EOF
+logoutput: stderr
+internal: $NS_IP port = $BACKEND_B_PORT
+external: warp-b
+clientmethod: none
+socksmethod: none
+user.privileged: proxy
+user.unprivileged: nobody
+timeout.negotiate: 30
+timeout.io: 0
+
+client pass {
+  from: 0.0.0.0/0 to: 0.0.0.0/0
+}
+socks pass {
+  from: 0.0.0.0/0 to: 0.0.0.0/0
+  command: connect bind udpassociate
+}
+EOF
+  chmod 600 "$SOCKD_B"
+}
+
+write_a_config() {
+  local account=$1 private_key
+  private_key=$(account_value private_key "$account")
+  [ -n "$private_key" ] || die 'candidate A private key is missing'
+  cat > /etc/wireguard/sockswg.conf <<EOF
+[Interface]
+PrivateKey = $private_key
+Address = 172.16.0.2/32
+MTU = 1420
+Table = 51821
+PostUp = ip -4 rule add priority 10020 from 172.16.0.2/32 lookup 51821
+PostDown = ip -4 rule del priority 10020 from 172.16.0.2/32 lookup 51821
+
+[Peer]
+PublicKey = $WARP_PEER_KEY
+AllowedIPs = 0.0.0.0/0
+Endpoint = $WARP_ENDPOINT
+PersistentKeepalive = 30
+EOF
+  chmod 600 /etc/wireguard/sockswg.conf
+}
+
+restart_a() {
+  systemctl stop warp-sockswg-watchdog.timer >/dev/null 2>&1 || true
+  systemctl restart wg-quick@sockswg.service
+  systemctl restart sockswg.service
+  systemctl start warp-sockswg-watchdog.timer >/dev/null 2>&1 || true
+}
+
+set_a_endpoint() {
+  local endpoint=$1 temporary
+  temporary=$(mktemp "$BASE_DIR/sockswg-a.endpoint.XXXXXX")
+  awk -v replacement="$endpoint" '
+    /^[[:space:]]*Endpoint[[:space:]]*=/ {print "Endpoint = " replacement; next}
+    {print}
+  ' /etc/wireguard/sockswg.conf > "$temporary"
+  cat "$temporary" > /etc/wireguard/sockswg.conf
+  rm -f "$temporary"
+  chmod 600 /etc/wireguard/sockswg.conf
+}
+
+a_connection_count() {
+  ss -Hntp state established 2>/dev/null |
+    awk '/users:\(\("danted"/ {count++} END {print count+0}'
+}
+
+a_drain_complete() {
+  local count switched now
+  count=$(a_connection_count)
+  switched=$(cat "$BASE_DIR/switched-to-b-at" 2>/dev/null || printf 0)
+  now=$(date +%s)
+  [ "$count" -le "$DRAIN_CONNECTION_THRESHOLD" ] && \
+    [ $((now - switched)) -ge "$DRAIN_MIN_SECONDS" ]
+}
+
+iptables_add_once() {
+  local table=$1
+  shift
+  if ! iptables -t "$table" -C "$@" >/dev/null 2>&1; then
+    iptables -t "$table" -A "$@"
+  fi
+}
+
+prepare_b() {
+  require_root
+  [ -s "$PRIVATE_KEY_B" ] || die 'standby private key is missing'
+  local endpoint_b
+  endpoint_b=$(cat "$ENDPOINT_B_FILE" 2>/dev/null || printf '%s' "$WARP_ENDPOINT")
+  cleanup_b || true
+  ip netns add "$NS_B"
+  ip netns exec "$NS_B" sysctl -q -w net.ipv6.conf.all.disable_ipv6=1
+  ip netns exec "$NS_B" sysctl -q -w net.ipv6.conf.default.disable_ipv6=1
+  ip link add "$VETH_HOST" type veth peer name "$VETH_NS"
+  ip link set "$VETH_NS" netns "$NS_B"
+  ip address add "$HOST_ADDR" dev "$VETH_HOST"
+  ip link set "$VETH_HOST" up
+
+  ip -n "$NS_B" link set lo up
+  ip -n "$NS_B" address add "$NS_ADDR" dev "$VETH_NS"
+  ip -n "$NS_B" link set "$VETH_NS" up
+  ip -n "$NS_B" route add default via "$HOST_IP" dev "$VETH_NS"
+
+  ip netns exec "$NS_B" ip link add warp-b type wireguard
+  ip netns exec "$NS_B" wg set warp-b private-key "$PRIVATE_KEY_B" \
+    peer "$WARP_PEER_KEY" allowed-ips '0.0.0.0/0' \
+    endpoint "$endpoint_b" persistent-keepalive 30
+  ip -n "$NS_B" address add "$WARP4" dev warp-b
+  ip -n "$NS_B" link set warp-b mtu 1420 up
+  ip -n "$NS_B" route add default dev warp-b table "$TABLE_B"
+  ip -n "$NS_B" rule add priority 10020 from "$WARP4" lookup "$TABLE_B"
+
+  sysctl -q -w net.ipv4.ip_forward=1
+  iptables_add_once nat POSTROUTING -s 10.203.2.0/30 \
+    -m comment --comment sockswg-bluegreen-nat -j MASQUERADE
+  iptables_add_once nat POSTROUTING -d "$NS_IP/32" -p tcp \
+    --dport "$BACKEND_B_PORT" -o "$VETH_HOST" \
+    -m comment --comment sockswg-bluegreen-selector-snat -j MASQUERADE
+  iptables_add_once nat POSTROUTING -d "$NS_IP/32" -p udp \
+    --dport "$BACKEND_B_PORT" -o "$VETH_HOST" \
+    -m comment --comment sockswg-bluegreen-selector-snat -j MASQUERADE
+}
+
+cleanup_b() {
+  ip netns del "$NS_B" >/dev/null 2>&1 || true
+  ip link del "$VETH_HOST" >/dev/null 2>&1 || true
+}
+
+delete_selector_rules() {
+  local rule
+  for rule in tcp udp; do
+    while iptables -t nat -C OUTPUT -p "$rule" -d 127.0.0.1/32 \
+      --dport "$FRONT_PORT" -m owner ! --uid-owner "$(id -u "$CHECK_USER")" \
+      -m comment --comment "$SELECTOR_COMMENT" \
+      -j DNAT --to-destination "$NS_IP:$BACKEND_B_PORT" >/dev/null 2>&1; do
+      iptables -t nat -D OUTPUT -p "$rule" -d 127.0.0.1/32 \
+        --dport "$FRONT_PORT" -m owner ! --uid-owner "$(id -u "$CHECK_USER")" \
+        -m comment --comment "$SELECTOR_COMMENT" \
+        -j DNAT --to-destination "$NS_IP:$BACKEND_B_PORT"
+    done
+  done
+}
+
+switch_a() {
+  require_root
+  delete_selector_rules
+  printf 'a\n' > "$ACTIVE_FILE"
+  rm -f "$BASE_DIR/switched-to-b-at"
+  log 'new SOCKS connections now use primary A; established B connections are draining'
+}
+
+switch_b() {
+  require_root
+  health_b >/dev/null || die 'standby B did not pass the health check'
+  delete_selector_rules
+  local uid
+  uid=$(id -u "$CHECK_USER")
+  iptables -t nat -I OUTPUT 1 -p tcp -d 127.0.0.1/32 \
+    --dport "$FRONT_PORT" -m owner ! --uid-owner "$uid" \
+    -m comment --comment "$SELECTOR_COMMENT" \
+    -j DNAT --to-destination "$NS_IP:$BACKEND_B_PORT"
+  iptables -t nat -I OUTPUT 1 -p udp -d 127.0.0.1/32 \
+    --dport "$FRONT_PORT" -m owner ! --uid-owner "$uid" \
+    -m comment --comment "$SELECTOR_COMMENT" \
+    -j DNAT --to-destination "$NS_IP:$BACKEND_B_PORT"
+  printf 'b\n' > "$ACTIVE_FILE"
+  date +%s > "$BASE_DIR/switched-to-b-at"
+  log 'new SOCKS connections now use standby B; established A connections are draining'
+}
+
+apply_active() {
+  case "$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)" in
+    b) switch_b ;;
+    *) switch_a ;;
+  esac
+}
+
+trace_via() {
+  local proxy=$1
+  shift
+  "$@" curl -4ksS --max-time 10 --socks5-hostname "$proxy" \
+    https://www.cloudflare.com/cdn-cgi/trace
+}
+
+google_code_via() {
+  local proxy=$1
+  shift
+  "$@" curl -4ksS -o /dev/null -w '%{http_code}' --max-time 12 \
+    --socks5-hostname "$proxy" https://www.google.com/
+}
+
+health_result() {
+  local proxy=$1
+  shift
+  local trace warp loc code
+  trace=$(trace_via "$proxy" "$@" 2>/dev/null) || return 1
+  warp=$(awk -F= '$1 == "warp" {print $2}' <<<"$trace")
+  loc=$(awk -F= '$1 == "loc" {print $2}' <<<"$trace")
+  [[ "$warp" =~ ^(on|plus)$ ]] || return 1
+  [ -z "$DESIRED_LOC" ] || [ "$loc" = "$DESIRED_LOC" ] || return 1
+  code=$(google_code_via "$proxy" "$@" 2>/dev/null) || return 1
+  [[ "$code" =~ ^[23][0-9][0-9]$ ]] || return 1
+  [ "$code" != 429 ] || return 1
+  printf 'loc=%s warp=%s google=%s\n' "$loc" "$warp" "$code"
+}
+
+health_a() {
+  health_result "127.0.0.1:$FRONT_PORT" runuser -u "$CHECK_USER" --
+}
+
+health_b() {
+  systemctl is-active --quiet sockswg-bluegreen-b.service || return 1
+  health_result "$NS_IP:$BACKEND_B_PORT"
+}
+
+public_ip_a() {
+  trace_via "127.0.0.1:$FRONT_PORT" runuser -u "$CHECK_USER" -- 2>/dev/null |
+    awk -F= '$1 == "ip" {print $2; exit}'
+}
+
+public_ip_b() {
+  trace_via "$NS_IP:$BACKEND_B_PORT" 2>/dev/null |
+    awk -F= '$1 == "ip" {print $2; exit}'
+}
+
+validate_candidate() {
+  local slot=$1 forbidden_ip=${2:-} other_ip candidate_ip i
+  for i in 1 2 3; do
+    "health_$slot" >/dev/null || return 1
+    [ "$i" = 3 ] || sleep 2
+  done
+  candidate_ip=$("public_ip_$slot")
+  if [ "$slot" = a ]; then
+    other_ip=$(public_ip_b)
+  else
+    other_ip=$(public_ip_a)
+  fi
+  [ -n "$candidate_ip" ] || return 1
+  [ "$candidate_ip" != "$other_ip" ] || {
+    log "candidate $slot was rejected because both slots use $candidate_ip"
+    return 1
+  }
+  [ -z "$forbidden_ip" ] || [ "$candidate_ip" != "$forbidden_ip" ] || {
+    log "candidate $slot was rejected because its public IP did not change: $candidate_ip"
+    return 1
+  }
+  printf '%s\n' "$candidate_ip"
+}
+
+refresh_b_once() {
+  require_root
+  [ "$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)" = a ] || \
+    die 'refusing to rebuild B while B is active'
+  local candidate previous candidate_ip previous_ip
+  previous_ip=$(public_ip_b || true)
+  candidate=$(mktemp "$BASE_DIR/account-b.candidate.XXXXXX")
+  previous=$(mktemp "$BASE_DIR/account-b.previous.XXXXXX")
+  chmod 600 "$candidate" "$previous"
+  cp -f "$ACCOUNT_B" "$previous"
+  log 'registering a new peer for inactive slot B'
+  if ! register_account "$candidate"; then
+    rm -f "$candidate" "$previous"
+    return 1
+  fi
+  cp -f "$candidate" "$ACCOUNT_B"
+  write_b_config "$ACCOUNT_B"
+  systemctl restart sockswg-bluegreen-b.service
+  if candidate_ip=$(validate_candidate b "$previous_ip"); then
+    cancel_account "$previous"
+    rm -f "$candidate" "$previous"
+    log "inactive slot B accepted a new qualified WARP IP: $candidate_ip"
+    return 0
+  fi
+  log 'new B peer failed qualification; restoring the previous standby peer'
+  cancel_account "$ACCOUNT_B"
+  cp -f "$previous" "$ACCOUNT_B"
+  write_b_config "$ACCOUNT_B"
+  systemctl restart sockswg-bluegreen-b.service
+  rm -f "$candidate" "$previous"
+  health_b >/dev/null || die 'the previous B peer did not recover after candidate rollback'
+  return 1
+}
+
+refresh_b() {
+  local attempts=${1:-3} i
+  [[ "$attempts" =~ ^[1-9]$|^10$ ]] || die 'refresh-b attempts must be between 1 and 10'
+  for ((i=1; i<=attempts; i++)); do
+    refresh_b_once && return 0
+    [ "$i" = "$attempts" ] || sleep 10
+  done
+  die "no qualified B peer was found after $attempts attempts"
+}
+
+reroll_b() {
+  local attempts=${1:-6} rejected_ip candidate_ip i endpoint
+  [ "$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)" = a ] || \
+    die 'refusing to reroll B while B is active'
+  rejected_ip=$(public_ip_b || true)
+  i=0
+  for endpoint in $ENDPOINT_CANDIDATES; do
+    i=$((i + 1))
+    [ "$i" -le "$attempts" ] || break
+    printf '%s\n' "$endpoint" > "$ENDPOINT_B_FILE"
+    log "rerolling inactive B via $endpoint ($i/$attempts)"
+    systemctl restart sockswg-bluegreen-b.service
+    sleep 3
+    if candidate_ip=$(validate_candidate b "$rejected_ip"); then
+      log "inactive B accepted rerolled WARP IP: $candidate_ip"
+      return 0
+    fi
+  done
+  printf '%s\n' "$WARP_ENDPOINT" > "$ENDPOINT_B_FILE"
+  systemctl restart sockswg-bluegreen-b.service
+  return 1
+}
+
+repair_b() {
+  reroll_b 6 && return 0
+  log 'existing B peer did not produce a qualified IP; registering a replacement peer'
+  refresh_b 3
+}
+
+refresh_a_once() {
+  require_root
+  [ "$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)" = b ] || \
+    die 'refusing to rebuild A while A is active'
+  a_drain_complete || \
+    die 'refusing to rebuild A while established A connections are still draining'
+  local candidate previous_config previous_account candidate_ip previous_ip
+  previous_ip=$(public_ip_a || true)
+  candidate=$(mktemp "$BASE_DIR/account-a.candidate.XXXXXX")
+  previous_config=$(mktemp "$BASE_DIR/sockswg-a.previous.XXXXXX")
+  chmod 600 "$candidate" "$previous_config"
+  cp -f /etc/wireguard/sockswg.conf "$previous_config"
+  previous_account=
+  if [ -s "$ACCOUNT_A" ]; then
+    previous_account=$(mktemp "$BASE_DIR/account-a.previous.XXXXXX")
+    chmod 600 "$previous_account"
+    cp -f "$ACCOUNT_A" "$previous_account"
+  fi
+  log 'registering a new peer for drained inactive slot A'
+  if ! register_account "$candidate"; then
+    rm -f "$candidate" "$previous_config"
+    [ -z "$previous_account" ] || rm -f "$previous_account"
+    return 1
+  fi
+  write_a_config "$candidate"
+  restart_a
+  if candidate_ip=$(validate_candidate a "$previous_ip"); then
+    [ -z "$previous_account" ] || cancel_account "$previous_account"
+    cp -f "$candidate" "$ACCOUNT_A"
+    rm -f "$candidate" "$previous_config"
+    [ -z "$previous_account" ] || rm -f "$previous_account"
+    log "inactive slot A accepted a new qualified WARP IP: $candidate_ip"
+    return 0
+  fi
+  log 'new A peer failed qualification; restoring the previous primary peer'
+  cancel_account "$candidate"
+  cp -f "$previous_config" /etc/wireguard/sockswg.conf
+  chmod 600 /etc/wireguard/sockswg.conf
+  restart_a
+  rm -f "$candidate" "$previous_config"
+  [ -z "$previous_account" ] || rm -f "$previous_account"
+  return 1
+}
+
+refresh_a() {
+  local attempts=${1:-3} i
+  [[ "$attempts" =~ ^[1-9]$|^10$ ]] || die 'refresh-a attempts must be between 1 and 10'
+  for ((i=1; i<=attempts; i++)); do
+    refresh_a_once && return 0
+    [ "$i" = "$attempts" ] || sleep 10
+  done
+  die "no qualified A peer was found after $attempts attempts"
+}
+
+reroll_a() {
+  local attempts=${1:-6} rejected_ip candidate_ip i endpoint
+  [ "$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)" = b ] || \
+    die 'refusing to reroll A while A is active'
+  a_drain_complete || \
+    die 'refusing to reroll A while established A connections are still draining'
+  rejected_ip=$(public_ip_a || true)
+  i=0
+  for endpoint in $ENDPOINT_CANDIDATES; do
+    i=$((i + 1))
+    [ "$i" -le "$attempts" ] || break
+    set_a_endpoint "$endpoint"
+    log "rerolling drained inactive A via $endpoint ($i/$attempts)"
+    restart_a
+    sleep 3
+    if candidate_ip=$(validate_candidate a "$rejected_ip"); then
+      log "inactive A accepted rerolled WARP IP: $candidate_ip"
+      return 0
+    fi
+  done
+  set_a_endpoint "$WARP_ENDPOINT"
+  restart_a
+  return 1
+}
+
+repair_a() {
+  reroll_a 6 && return 0
+  log 'existing A peer did not produce a qualified IP; registering a replacement peer'
+  refresh_a 3
+}
+
+counter_get() {
+  cat "$STATE_DIR/$1" 2>/dev/null || printf 0
+}
+
+counter_set() {
+  printf '%s\n' "$2" > "$STATE_DIR/$1"
+}
+
+rotation_due() {
+  local slot=$1 now last
+  now=$(date +%s)
+  last=$(counter_get "last_rotate_$slot")
+  [ $((now - last)) -ge "$ROTATE_INTERVAL" ]
+}
+
+mark_rotation() {
+  counter_set "last_rotate_$1" "$(date +%s)"
+}
+
+check() {
+  require_root
+  install -d -m 700 "$STATE_DIR"
+  exec 9>"$STATE_DIR/lock"
+  flock -n 9 || exit 0
+  local active a_ok=0 b_ok=0 b_candidate_ok=0 a_candidate_ok=0 failures recoveries a_ip b_ip
+  active=$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)
+  health_a >/dev/null && a_ok=1 || true
+  health_b >/dev/null && b_ok=1 || true
+  [ "$a_ok" = 1 ] && a_ip=$(public_ip_a || true) || a_ip=
+  [ "$b_ok" = 1 ] && b_ip=$(public_ip_b || true) || b_ip=
+  [ "$b_ok" = 1 ] && { [ -z "$a_ip" ] || [ "$b_ip" != "$a_ip" ]; } && b_candidate_ok=1 || true
+  [ "$a_ok" = 1 ] && { [ -z "$b_ip" ] || [ "$a_ip" != "$b_ip" ]; } && a_candidate_ok=1 || true
+
+  if [ "$active" = a ]; then
+    if [ "$b_candidate_ok" = 1 ]; then
+      counter_set b_candidate_fail 0
+    else
+      failures=$(( $(counter_get b_candidate_fail) + 1 ))
+      counter_set b_candidate_fail "$failures"
+      log "inactive B candidate failed qualification ($failures/$CANDIDATE_FAIL_THRESHOLD)"
+      if [ "$failures" -ge "$CANDIDATE_FAIL_THRESHOLD" ] && rotation_due b; then
+        mark_rotation b
+        if repair_b; then
+          b_ok=1
+          b_candidate_ok=1
+          counter_set b_candidate_fail 0
+        fi
+      fi
+    fi
+    if [ "$a_ok" = 1 ]; then
+      counter_set a_fail 0
+      exit 0
+    fi
+    failures=$(( $(counter_get a_fail) + 1 ))
+    counter_set a_fail "$failures"
+    log "primary A health check failed ($failures/$FAIL_THRESHOLD)"
+    if [ "$failures" -ge "$FAIL_THRESHOLD" ] && [ "$b_ok" = 1 ]; then
+      switch_b
+      counter_set a_fail 0
+      counter_set a_recover 0
+    fi
+  else
+    if [ "$a_candidate_ok" != 1 ] && a_drain_complete && rotation_due a; then
+      mark_rotation a
+      if repair_a; then
+        a_ok=1
+        a_candidate_ok=1
+      fi
+    fi
+    if [ "$b_ok" != 1 ]; then
+      failures=$(( $(counter_get b_fail) + 1 ))
+      counter_set b_fail "$failures"
+      log "standby B health check failed ($failures/$FAIL_THRESHOLD)"
+      if [ "$failures" -ge "$FAIL_THRESHOLD" ] && [ "$a_ok" = 1 ]; then
+        switch_a
+        counter_set b_fail 0
+      fi
+      exit 0
+    fi
+    counter_set b_fail 0
+    if [ "$PREFER_A" = yes ] && [ "$a_ok" = 1 ]; then
+      recoveries=$(( $(counter_get a_recover) + 1 ))
+      counter_set a_recover "$recoveries"
+      if [ "$recoveries" -ge "$RECOVER_THRESHOLD" ]; then
+        switch_a
+        counter_set a_recover 0
+      fi
+    else
+      counter_set a_recover 0
+    fi
+  fi
+}
+
+show_test() {
+  local name=$1 result
+  if result=$("health_$name"); then
+    printf '%s healthy %s\n' "${name^^}" "$result"
+  else
+    printf '%s unhealthy\n' "${name^^}"
+    return 1
+  fi
+}
+
+status() {
+  local a_ip b_ip diverse=no
+  a_ip=$(public_ip_a 2>/dev/null || true)
+  b_ip=$(public_ip_b 2>/dev/null || true)
+  [ -n "$a_ip" ] && [ -n "$b_ip" ] && [ "$a_ip" != "$b_ip" ] && diverse=yes
+  printf 'active=%s b_service=%s selector_rules=%s draining_a_connections=%s\n' \
+    "$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)" \
+    "$(systemctl is-active sockswg-bluegreen-b.service 2>/dev/null || true)" \
+    "$(iptables -t nat -S OUTPUT | grep -c -- "$SELECTOR_COMMENT" || true)" \
+    "$(a_connection_count)"
+  printf 'a_ip=%s b_ip=%s diverse=%s\n' "${a_ip:-unavailable}" "${b_ip:-unavailable}" "$diverse"
+  show_test a || true
+  show_test b || true
+}
+
+write_units() {
+  cat > /etc/systemd/system/sockswg-bluegreen-b.service <<'EOF'
+[Unit]
+Description=sockswg blue/green standby WARP tunnel B
+After=network-online.target sockswg.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/local/sbin/sockswg-bluegreen prepare-b
+ExecStart=/usr/bin/ip netns exec sockswg-b /usr/sbin/danted -f /etc/sockswg-bluegreen/sockd-b.conf
+ExecStopPost=-/usr/local/sbin/sockswg-bluegreen cleanup-b
+Restart=always
+RestartSec=5s
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat > /etc/systemd/system/sockswg-bluegreen-selector.service <<'EOF'
+[Unit]
+Description=Restore sockswg blue/green active selector
+After=sockswg.service sockswg-bluegreen-b.service
+Requires=sockswg-bluegreen-b.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sockswg-bluegreen apply-active
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat > /etc/systemd/system/sockswg-bluegreen-check.service <<'EOF'
+[Unit]
+Description=Check sockswg blue/green WARP paths
+After=network-online.target sockswg-bluegreen-b.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sockswg-bluegreen check
+EOF
+
+  cat > /etc/systemd/system/sockswg-bluegreen-check.timer <<'EOF'
+[Unit]
+Description=Check sockswg blue/green WARP paths every 20 seconds
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=20s
+AccuracySec=2s
+Unit=sockswg-bluegreen-check.service
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl daemon-reload
+}
+
+install_all() {
+  require_root
+  command -v danted >/dev/null || die 'danted is required'
+  command -v iptables >/dev/null || die 'iptables is required'
+  install -d -m 700 "$BASE_DIR" "$(dirname "$API_SCRIPT")"
+  if ! id -u "$CHECK_USER" >/dev/null 2>&1; then
+    useradd --system --no-create-home --shell /usr/sbin/nologin "$CHECK_USER"
+  fi
+  ensure_account_b
+  write_b_config
+  [ -s "$ENDPOINT_B_FILE" ] || printf '%s\n' "$WARP_ENDPOINT" > "$ENDPOINT_B_FILE"
+  [ -e "$ACTIVE_FILE" ] || printf 'a\n' > "$ACTIVE_FILE"
+  write_units
+  systemctl enable sockswg-bluegreen-b.service >/dev/null
+  systemctl restart sockswg-bluegreen-b.service
+  systemctl enable sockswg-bluegreen-selector.service >/dev/null
+  apply_active
+  systemctl enable --now sockswg-bluegreen-check.timer >/dev/null
+  show_test b || die 'standby B installation completed but health validation failed'
+  log 'blue/green standby installed; primary A remains active'
+}
+
+case "${1:-}" in
+  install) install_all ;;
+  prepare-b) prepare_b ;;
+  cleanup-b) cleanup_b ;;
+  switch-a) switch_a ;;
+  switch-b) switch_b ;;
+  apply-active) apply_active ;;
+  check) check ;;
+  refresh-a) refresh_a "${2:-3}" ;;
+  refresh-b) refresh_b "${2:-3}" ;;
+  repair-a) repair_a ;;
+  repair-b) repair_b ;;
+  test-a) show_test a ;;
+  test-b) show_test b ;;
+  status) status ;;
+  *) die 'usage: sockswg-bluegreen {install|prepare-b|cleanup-b|switch-a|switch-b|apply-active|check|repair-a|repair-b|refresh-a [attempts]|refresh-b [attempts]|test-a|test-b|status}' ;;
+esac

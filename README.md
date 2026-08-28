@@ -25,6 +25,22 @@ warp q       # 开关 sockswg
 
 迁移时先在空闲临时端口并行验证 WARP IPv4 和 IPv6，成功后才接管原 SOCKS 端口；失败会自动恢复 WireProxy。旧 WireProxy 二进制和配置会禁用并保留作回滚，不会继续占用端口。`sockswg` watchdog 每 30 秒分别检测两栈，服务/网卡消失会立即重建，连续两次数据面失败会依次轮换 `2408 → 4500 → 500 → 1701` UDP Endpoint 并复测。当前安装支持使用 systemd 的 Debian/Ubuntu；Debian 12 优先使用 Dante，Debian 13 在官方源没有 Dante 时自动改用 MicroSocks 和专用 UID 策略路由。
 
+#### sockswg IPv4 蓝绿灾备（Debian 12/Dante 试运行）
+
+`sockswg-bluegreen` 在同一台 VPS 上保留当前 A 隧道，并在独立网络命名空间中运行纯 IPv4 的 B 隧道。iptables 连接跟踪只把新 SOCKS 连接切到另一槽，已经建立的 TCP 连接继续沿原隧道传输并自然排空。每 20 秒同时检查 Cloudflare 地区、`warp=on/plus` 和 Google HTTP 状态；活动槽连续失败两次才切换，恢复后连续通过两次才回到优先 A。
+
+空闲槽不合格时，管理器先轮换 Endpoint 并重连同一个 Peer，连续验收地区、Google 非 `429` 以及与活动槽的出口差异；多次失败后才注销并注册候选 Peer，失败候选会注销并回滚。WARP 出口由 Cloudflare 分配，蓝绿机制提高可用性但不能保证永久固定或无限生成不同公网 IP。
+
+当前试运行仅支持已有 Dante 后端的 Debian 12 `sockswg`，尚未默认集成到 `warp p`；Debian 13/MicroSocks 完成独立验证前不要批量启用。
+
+```bash
+wget -qO /usr/local/sbin/sockswg-bluegreen https://raw.githubusercontent.com/vruru/warp-selfheal/main/sockswg/sockswg-bluegreen
+wget -qO /usr/local/lib/warp-selfheal/api.sh https://raw.githubusercontent.com/vruru/warp-selfheal/main/api.sh
+chmod 755 /usr/local/sbin/sockswg-bluegreen /usr/local/lib/warp-selfheal/api.sh
+sockswg-bluegreen install
+sockswg-bluegreen status
+```
+
 本仓库保留了上游完整历史和安装所需的 `api.sh`、WireProxy、wireguard-go、wgcf、warp-go、endpoint 等文件，并把脚本的运行时回源和自更新地址改为本仓库。原仓库中未包含但菜单会调用的 `warp_unlock` 与 `resolvconf` 也已连同各自许可证镜像到 [`vendor/`](vendor/README.md)；旧版 Docker 模式改为使用仓库内 Dockerfile 在本机生成镜像，不再拉取原作者镜像。因此原项目仓库下线后，已镜像的安装功能仍可从本仓库使用；Cloudflare API、系统软件源及第三方官方服务仍需联网。
 
 * * *
@@ -47,6 +63,8 @@ warp q       # 开关 sockswg
 * * *
 
 ## 更新信息
+2026.08.29 sockswg-bluegreen 试运行版：在同一 VPS 上增加 IPv4-only A/B WARP 灾备。备用槽位于独立网络命名空间；切换只影响新连接，旧连接自然排空。健康判断同时验证地区、WARP 状态和 Google 非 `429`；空闲槽优先通过 Endpoint 轮换重连刷新出口，新 Peer 注册仅作为兜底。当前仅在 Debian 12/Dante 上验证，暂不随 `warp p` 默认安装。
+
 2026.08.29 menu.sh v3.2.7-selfheal.9 修复 Debian 12/Dante 与 Soga 的本机对接：Soga 连接 `127.0.0.1` SOCKS 时可能绑定 VPS 公网源地址，旧配置仅允许来源 `127.0.0.1/32`，导致 SOCKS 握手立即被重置。监听仍严格绑定回环地址，不向公网开放，但现在接受本机进程使用任一本地源地址连接。
 
 2026.08.28 menu.sh v3.2.7-selfheal.8 强化批量迁移：临时端口预检也会自动尝试全部官方 Endpoint 端口；正式接管原 SOCKS 端口时保留已验证并完成握手的 WireGuard 网卡，只切换 SOCKS 监听，避免大量 Soga 连接同时重连时与隧道冷启动竞争。
