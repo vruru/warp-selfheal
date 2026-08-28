@@ -9,6 +9,7 @@ SOURCE_CONFIG=/etc/wireguard/proxy.conf
 WATCHDOG=/usr/local/sbin/warp-sockswg-watchdog
 WATCHDOG_SETTINGS=/etc/default/warp-sockswg-watchdog
 STATE_DIR=/run/warp-sockswg-watchdog
+BACKEND_FILE=$CONFIG_DIR/backend
 TABLE_ID=51821
 RULE_PRIORITY=10020
 DEFAULT_PORT=40000
@@ -24,14 +25,26 @@ valid_port() {
 
 install_dependencies() {
   if command -v apt-get >/dev/null 2>&1; then
-    if dpkg-query -W -f='${Status}' dante-server 2>/dev/null | grep -q 'install ok installed' &&
-       systemctl is-active --quiet danted.service; then
-      die 'an existing danted.service is active; refusing to replace it'
-    fi
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
-    apt-get install -y --no-install-recommends wireguard-tools dante-server curl iproute2
-    systemctl disable --now danted.service >/dev/null 2>&1 || true
+    if apt-cache show dante-server >/dev/null 2>&1; then
+      if dpkg-query -W -f='${Status}' dante-server 2>/dev/null | grep -q 'install ok installed' &&
+         systemctl is-active --quiet danted.service; then
+        die 'an existing danted.service is active; refusing to replace it'
+      fi
+      SOCKS_BACKEND=dante
+      apt-get install -y --no-install-recommends wireguard-tools dante-server curl iproute2
+      systemctl disable --now danted.service >/dev/null 2>&1 || true
+    elif apt-cache show microsocks >/dev/null 2>&1; then
+      SOCKS_BACKEND=microsocks
+      apt-get install -y --no-install-recommends wireguard-tools microsocks curl iproute2
+      if ! id -u sockswg-proxy >/dev/null 2>&1; then
+        useradd --system --no-create-home --shell /usr/sbin/nologin sockswg-proxy
+      fi
+      SOCKS_BACKEND_UID=$(id -u sockswg-proxy)
+    else
+      die 'neither dante-server nor microsocks is available from the configured package repositories'
+    fi
   else
     die 'sockswg currently supports Debian and Ubuntu systemd hosts'
   fi
@@ -82,12 +95,20 @@ write_configs() {
       printf 'PostUp = ip -6 rule add priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address6" "$TABLE_ID"
       printf 'PostDown = ip -6 rule del priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address6" "$TABLE_ID"
     }
+    if [ "${SOCKS_BACKEND:-}" = microsocks ]; then
+      printf 'PostUp = ip -4 rule add priority %s uidrange %s-%s lookup %s\n' "$((RULE_PRIORITY + 1))" "$SOCKS_BACKEND_UID" "$SOCKS_BACKEND_UID" "$TABLE_ID"
+      printf 'PostDown = ip -4 rule del priority %s uidrange %s-%s lookup %s\n' "$((RULE_PRIORITY + 1))" "$SOCKS_BACKEND_UID" "$SOCKS_BACKEND_UID" "$TABLE_ID"
+      printf 'PostUp = ip -6 rule add priority %s uidrange %s-%s lookup %s\n' "$((RULE_PRIORITY + 1))" "$SOCKS_BACKEND_UID" "$SOCKS_BACKEND_UID" "$TABLE_ID"
+      printf 'PostDown = ip -6 rule del priority %s uidrange %s-%s lookup %s\n' "$((RULE_PRIORITY + 1))" "$SOCKS_BACKEND_UID" "$SOCKS_BACKEND_UID" "$TABLE_ID"
+    fi
     printf '\n[Peer]\nPublicKey = %s\n' "$public_key"
     printf 'AllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = %s\nPersistentKeepalive = 30\n' "$endpoint"
   } > "$WG_CONFIG"
   chmod 600 "$WG_CONFIG"
 
-  cat > "$SOCKS_CONFIG" <<EOF
+  printf '%s\n' "$SOCKS_BACKEND" > "$BACKEND_FILE"
+  if [ "$SOCKS_BACKEND" = dante ]; then
+    cat > "$SOCKS_CONFIG" <<EOF
 logoutput: stderr
 internal: 127.0.0.1 port = $port
 external: sockswg
@@ -113,15 +134,25 @@ socks pass {
   command: connect bind udpassociate
 }
 EOF
+  else
+    cat > "$SOCKS_CONFIG" <<EOF
+# Port metadata for sockswg-manager and warp-sockswg-watchdog.
+internal: 127.0.0.1 port = $port
+EOF
+  fi
   chmod 600 "$SOCKS_CONFIG"
 }
 
 write_units() {
   local watchdog_source="$SCRIPT_DIR/sockswg-watchdog"
+  local port
   if [ "$(readlink -f "$0")" != /usr/local/sbin/sockswg-manager ]; then
     install -m 755 "$0" /usr/local/sbin/sockswg-manager
   fi
-  cat > /etc/systemd/system/sockswg.service <<'EOF'
+  SOCKS_BACKEND=${SOCKS_BACKEND:-$(cat "$BACKEND_FILE" 2>/dev/null)}
+  port=$(awk '/^internal:/{print $NF; exit}' "$SOCKS_CONFIG")
+  if [ "$SOCKS_BACKEND" = dante ]; then
+    cat > /etc/systemd/system/sockswg.service <<'EOF'
 [Unit]
 Description=sockswg local SOCKS proxy over kernel WireGuard WARP
 Documentation=https://github.com/vruru/warp-selfheal
@@ -140,6 +171,28 @@ LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
 EOF
+  elif [ "$SOCKS_BACKEND" = microsocks ]; then
+    cat > /etc/systemd/system/sockswg.service <<EOF
+[Unit]
+Description=sockswg local SOCKS proxy over kernel WireGuard WARP
+Documentation=https://github.com/vruru/warp-selfheal
+Requires=wg-quick@sockswg.service
+After=network-online.target wg-quick@sockswg.service
+
+[Service]
+Type=simple
+User=sockswg-proxy
+ExecStart=/usr/bin/microsocks -q -i 127.0.0.1 -p $port
+Restart=always
+RestartSec=3s
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  else
+    die "unsupported SOCKS backend: $SOCKS_BACKEND"
+  fi
 
   cat > /etc/systemd/system/warp-sockswg-watchdog.service <<'EOF'
 [Unit]
@@ -266,6 +319,7 @@ activate_stack() {
   pause_watchdog
   stop_stack
   sed -i -E "s#^(internal: 127\\.0\\.0\\.1 port = )[0-9]+#\\1$port#" "$SOCKS_CONFIG"
+  write_units
   start_stack
   health_check_retry "$port" || { stop_stack; die 'health check failed'; }
   resume_watchdog
@@ -296,6 +350,7 @@ migrate_wireproxy() {
   systemctl disable --now warp-wireproxy-watchdog.timer >/dev/null 2>&1 || true
   systemctl disable --now wireproxy.service >/dev/null 2>&1 || true
   sed -i -E "s#^(internal: 127\\.0\\.0\\.1 port = )[0-9]+#\\1$source_port#" "$SOCKS_CONFIG"
+  write_units
 
   if start_stack && health_check_retry "$source_port"; then
     resume_watchdog
@@ -326,6 +381,8 @@ status_stack() {
 }
 
 uninstall_stack() {
+  local backend=''
+  [ -r "$BACKEND_FILE" ] && read -r backend < "$BACKEND_FILE"
   pause_watchdog
   systemctl disable --now warp-sockswg-watchdog.timer >/dev/null 2>&1 || true
   stop_stack
@@ -335,6 +392,7 @@ uninstall_stack() {
   rm -f "$WATCHDOG" "$WATCHDOG_SETTINGS" "$WG_CONFIG"
   rm -f /usr/local/sbin/sockswg-manager
   rm -rf "$CONFIG_DIR" "$STATE_DIR"
+  [ "$backend" = microsocks ] && userdel sockswg-proxy >/dev/null 2>&1 || true
   systemctl daemon-reload
   info 'uninstalled; WARP account and WireProxy files were retained'
 }

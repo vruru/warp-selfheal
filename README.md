@@ -23,7 +23,7 @@ warp p       # 全新安装，或把当前 WireProxy 安全迁移为 sockswg
 warp q       # 开关 sockswg
 ```
 
-迁移时先在空闲临时端口并行验证 WARP IPv4 和 IPv6，成功后才接管原 SOCKS 端口；失败会自动恢复 WireProxy。旧 WireProxy 二进制和配置会禁用并保留作回滚，不会继续占用端口。`sockswg` watchdog 每 30 秒分别检测两栈，服务/网卡消失会立即重建，连续两次数据面失败会依次轮换 `2408 → 4500 → 500 → 1701` UDP Endpoint 并复测。当前安装支持使用 systemd 的 Debian/Ubuntu。
+迁移时先在空闲临时端口并行验证 WARP IPv4 和 IPv6，成功后才接管原 SOCKS 端口；失败会自动恢复 WireProxy。旧 WireProxy 二进制和配置会禁用并保留作回滚，不会继续占用端口。`sockswg` watchdog 每 30 秒分别检测两栈，服务/网卡消失会立即重建，连续两次数据面失败会依次轮换 `2408 → 4500 → 500 → 1701` UDP Endpoint 并复测。当前安装支持使用 systemd 的 Debian/Ubuntu；Debian 12 优先使用 Dante，Debian 13 在官方源没有 Dante 时自动改用 MicroSocks 和专用 UID 策略路由。
 
 本仓库保留了上游完整历史和安装所需的 `api.sh`、WireProxy、wireguard-go、wgcf、warp-go、endpoint 等文件，并把脚本的运行时回源和自更新地址改为本仓库。原仓库中未包含但菜单会调用的 `warp_unlock` 与 `resolvconf` 也已连同各自许可证镜像到 [`vendor/`](vendor/README.md)；旧版 Docker 模式改为使用仓库内 Dockerfile 在本机生成镜像，不再拉取原作者镜像。因此原项目仓库下线后，已镜像的安装功能仍可从本仓库使用；Cloudflare API、系统软件源及第三方官方服务仍需联网。
 
@@ -47,6 +47,8 @@ warp q       # 开关 sockswg
 * * *
 
 ## 更新信息
+2026.08.28 menu.sh v3.2.7-selfheal.7 增加 Debian 13 兼容后端：若系统源没有 `dante-server`，自动安装 MicroSocks，并用独立的 `sockswg-proxy` 系统用户和 UID 策略路由确保 IPv4/IPv6 出站只进入 `sockswg`，主机默认路由不变。
+
 2026.08.28 menu.sh v3.2.7-selfheal.6 新增 `sockswg`：使用内核 WireGuard 承载 WARP，由 Dante 在本机提供 SOCKS5，保留 Soga 等应用既有的按规则 SOCKS 分流，同时绕开 WireProxy 单进程用户态数据面的性能上限。迁移采用临时端口双栈预检、失败自动回滚；独立 watchdog 支持服务拉起、IPv4/IPv6 分栈检测和官方 UDP Endpoint 轮换。
 
 2026.08.28 menu.sh v3.2.7-selfheal.5 增加 WireProxy Endpoint 自动故障转移：任意已配置栈连续检测失败达到阈值后，按 Cloudflare 官方 WireGuard 端口 `2408 → 4500 → 500 → 1701 → 2408` 轮换 Endpoint，再重启并复测。避免当前运营商或防火墙阻断某个 UDP 端口时只能手动修改配置；可通过 `/etc/default/warp-wireproxy-watchdog` 关闭或自定义端口顺序。

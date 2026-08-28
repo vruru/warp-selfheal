@@ -23,7 +23,7 @@ warp p       # install, or safely migrate the current WireProxy instance
 warp q       # toggle sockswg
 ```
 
-Migration validates both WARP IPv4 and IPv6 on a temporary port before taking over the original SOCKS port. Any failure restores WireProxy automatically. The independent watchdog checks both stacks every 30 seconds, reconstructs an inactive service/interface immediately, and rotates through the official UDP Endpoint ports after two consecutive data-plane failures. Installation currently supports Debian/Ubuntu systemd hosts.
+Migration validates both WARP IPv4 and IPv6 on a temporary port before taking over the original SOCKS port. Any failure restores WireProxy automatically. The independent watchdog checks both stacks every 30 seconds, reconstructs an inactive service/interface immediately, and rotates through the official UDP Endpoint ports after two consecutive data-plane failures. Installation supports Debian/Ubuntu systemd hosts; Debian 12 prefers Dante, while Debian 13 automatically uses MicroSocks with dedicated-UID policy routing when Dante is unavailable.
 
 This repository retains the complete upstream history and the runtime files used by installation, including `api.sh`, WireProxy, wireguard-go, wgcf, warp-go, and endpoint assets. Runtime fetches and self-updates now point to this repository. Dependencies previously fetched from separate original projects (`warp_unlock` and `resolvconf`) are mirrored with their licenses under [`vendor/`](vendor/README.md). The legacy Docker mode now builds its image locally from the repository's Dockerfile instead of pulling the original author's image. The mirrored installation paths therefore remain available if the original repository disappears; Cloudflare APIs, OS package repositories, and independent third-party services still require network access.
 
@@ -47,6 +47,8 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
+2026.08.28 menu.sh v3.2.7-selfheal.7 Add a Debian 13 compatibility backend. When `dante-server` is unavailable, the installer uses MicroSocks under a dedicated `sockswg-proxy` system user and adds UID policy rules for both IPv4 and IPv6 without changing the host default route.
+
 2026.08.28 menu.sh v3.2.7-selfheal.6 Add `sockswg`, combining kernel WireGuard WARP with a loopback-only Dante SOCKS5 proxy. Existing Soga-style SOCKS routing remains unchanged while the single-process userspace WireProxy data plane is bypassed. Migration performs dual-stack validation on a temporary port with automatic rollback, and the watchdog provides service recovery, per-stack checks, and Endpoint failover.
 
 2026.08.28 menu.sh v3.2.7-selfheal.5 Add automatic WireProxy Endpoint failover. Once any configured stack reaches the consecutive health-failure threshold, the watchdog rotates through Cloudflare's official WireGuard ports in the order `2408 → 4500 → 500 → 1701 → 2408`, then restarts and verifies the tunnel. This avoids manual configuration edits when an ISP or firewall blocks one UDP port. The feature and port order are configurable in `/etc/default/warp-wireproxy-watchdog`.

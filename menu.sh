@@ -2,7 +2,7 @@
 
 # 当前脚本版本号
 # Modified 2026-08-28: add per-stack recovery and automatic official Endpoint port failover.
-VERSION='3.2.7-selfheal.6'
+VERSION='3.2.7-selfheal.7'
 
 # 派生版自更新地址。
 SELFHEAL_RAW_URL='https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh'
@@ -1213,7 +1213,7 @@ uninstall() {
     [[ $SYSTEM != "Arch" && $(dkms status 2>/dev/null) =~ wireguard ]] && UNINSTALL_DEPENDENCIES_LIST+=${UNINSTALL_NOT_ARCH[i]}
     [ -e /etc/dnsmasq.d/warp.conf ] && UNINSTALL_DEPENDENCIES_LIST+=${UNINSTALL_DNSMASQ[i]}
   done
-  [ "$SOCKSWG_WAS_INSTALLED" = 1 ] && UNINSTALL_DEPENDENCIES_LIST+=" dante-server "
+  [ "$SOCKSWG_WAS_INSTALLED" = 1 ] && UNINSTALL_DEPENDENCIES_LIST+=" dante-server microsocks "
 
   # 列出依赖，确认是手动还是自动卸载
   UNINSTALL_DEPENDENCIES_LIST=$(awk '{for(i=1;i<=NF;i++) if(!seen[$i]++) printf("%s%s",(c++?" ":""),$i)}' <<< "$UNINSTALL_DEPENDENCIES_LIST")
