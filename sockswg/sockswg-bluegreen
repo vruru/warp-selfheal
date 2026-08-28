@@ -725,7 +725,7 @@ write_units() {
     exec_start='/usr/bin/ip netns exec sockswg-b /usr/sbin/danted -f /etc/sockswg-bluegreen/sockd-b.conf'
   else
     command -v setpriv >/dev/null || die 'setpriv is required for the MicroSocks backend'
-    exec_start='/usr/bin/ip netns exec sockswg-b /usr/bin/setpriv --reuid=nobody --regid=nogroup --clear-groups /usr/bin/microsocks -q -i 10.203.2.2 -p 40002'
+    exec_start='/usr/bin/ip netns exec sockswg-b /usr/bin/setpriv --reuid=nobody --regid=nogroup --clear-groups /usr/bin/microsocks -q -i 10.203.2.2 -p 40002 -b 172.16.0.2'
   fi
   cat > /etc/systemd/system/sockswg-bluegreen-b.service <<EOF
 [Unit]
