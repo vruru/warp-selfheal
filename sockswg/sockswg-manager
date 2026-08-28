@@ -1,0 +1,363 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CONFIG_DIR=/etc/sockswg
+WG_CONFIG=/etc/wireguard/sockswg.conf
+SOCKS_CONFIG=$CONFIG_DIR/sockd.conf
+SOURCE_CONFIG=/etc/wireguard/proxy.conf
+WATCHDOG=/usr/local/sbin/warp-sockswg-watchdog
+WATCHDOG_SETTINGS=/etc/default/warp-sockswg-watchdog
+STATE_DIR=/run/warp-sockswg-watchdog
+TABLE_ID=51821
+RULE_PRIORITY=10020
+DEFAULT_PORT=40000
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
+die() { printf 'sockswg: %s\n' "$*" >&2; exit 1; }
+info() { printf 'sockswg: %s\n' "$*"; }
+require_root() { [ "$(id -u)" = 0 ] || die 'must be run as root'; }
+
+valid_port() {
+  [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1000 ] && [ "$1" -le 65535 ]
+}
+
+install_dependencies() {
+  if command -v apt-get >/dev/null 2>&1; then
+    if dpkg-query -W -f='${Status}' dante-server 2>/dev/null | grep -q 'install ok installed' &&
+       systemctl is-active --quiet danted.service; then
+      die 'an existing danted.service is active; refusing to replace it'
+    fi
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y --no-install-recommends wireguard-tools dante-server curl iproute2
+    systemctl disable --now danted.service >/dev/null 2>&1 || true
+  else
+    die 'sockswg currently supports Debian and Ubuntu systemd hosts'
+  fi
+}
+
+proxy_value() {
+  local key=$1
+  awk -v key="$key" '
+    $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+      value=$0
+      sub(/^[^=]*=[[:space:]]*/, "", value)
+      sub(/[;#].*$/, "", value)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      print value
+      exit
+    }
+  ' "$SOURCE_CONFIG"
+}
+
+write_configs() {
+  local port=$1 addresses private_key mtu public_key endpoint address4 address6
+  addresses=$(proxy_value Address)
+  private_key=$(proxy_value PrivateKey)
+  mtu=$(proxy_value MTU)
+  public_key=$(proxy_value PublicKey)
+  endpoint=$(proxy_value Endpoint)
+  address4=$(tr ',' '\n' <<< "$addresses" | awk '/\./ {gsub(/[[:space:]]/,""); print; exit}')
+  address6=$(tr ',' '\n' <<< "$addresses" | awk '/:/ {gsub(/[[:space:]]/,""); print; exit}')
+
+  [ -n "$private_key" ] || die "PrivateKey missing from $SOURCE_CONFIG"
+  [ -n "$public_key" ] || die "PublicKey missing from $SOURCE_CONFIG"
+  [ -n "$endpoint" ] || die "Endpoint missing from $SOURCE_CONFIG"
+  [ -n "$address4$address6" ] || die "Address missing from $SOURCE_CONFIG"
+  mtu=${mtu:-1280}
+
+  install -d -m 700 /etc/wireguard "$CONFIG_DIR"
+  {
+    printf '[Interface]\nPrivateKey = %s\n' "$private_key"
+    [ -n "$address4" ] && printf 'Address = %s\n' "$address4"
+    [ -n "$address6" ] && printf 'Address = %s\n' "$address6"
+    printf 'MTU = %s\nTable = %s\n' "$mtu" "$TABLE_ID"
+    [ -n "$address4" ] && {
+      printf 'PostUp = ip -4 rule add priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address4" "$TABLE_ID"
+      printf 'PostDown = ip -4 rule del priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address4" "$TABLE_ID"
+    }
+    [ -n "$address6" ] && {
+      printf 'PostUp = ip -6 rule add priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address6" "$TABLE_ID"
+      printf 'PostDown = ip -6 rule del priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address6" "$TABLE_ID"
+    }
+    printf '\n[Peer]\nPublicKey = %s\n' "$public_key"
+    printf 'AllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = %s\nPersistentKeepalive = 30\n' "$endpoint"
+  } > "$WG_CONFIG"
+  chmod 600 "$WG_CONFIG"
+
+  cat > "$SOCKS_CONFIG" <<EOF
+logoutput: stderr
+internal: 127.0.0.1 port = $port
+external: sockswg
+clientmethod: none
+socksmethod: none
+user.privileged: proxy
+user.unprivileged: nobody
+timeout.negotiate: 30
+timeout.io: 0
+
+client pass {
+  from: 127.0.0.1/32 to: 0.0.0.0/0
+}
+client pass {
+  from: 127.0.0.1/32 to: ::/0
+}
+socks pass {
+  from: 127.0.0.1/32 to: 0.0.0.0/0
+  command: connect bind udpassociate
+}
+socks pass {
+  from: 127.0.0.1/32 to: ::/0
+  command: connect bind udpassociate
+}
+EOF
+  chmod 600 "$SOCKS_CONFIG"
+}
+
+write_units() {
+  local watchdog_source="$SCRIPT_DIR/sockswg-watchdog"
+  if [ "$(readlink -f "$0")" != /usr/local/sbin/sockswg-manager ]; then
+    install -m 755 "$0" /usr/local/sbin/sockswg-manager
+  fi
+  cat > /etc/systemd/system/sockswg.service <<'EOF'
+[Unit]
+Description=sockswg local SOCKS proxy over kernel WireGuard WARP
+Documentation=https://github.com/vruru/warp-selfheal
+Requires=wg-quick@sockswg.service
+After=network-online.target wg-quick@sockswg.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/touch /run/danted.pid
+ExecStartPre=/usr/bin/chown proxy:proxy /run/danted.pid
+ExecStart=/usr/sbin/danted -f /etc/sockswg/sockd.conf
+Restart=always
+RestartSec=3s
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat > /etc/systemd/system/warp-sockswg-watchdog.service <<'EOF'
+[Unit]
+Description=Health check and self-healing for sockswg WARP
+After=network-online.target sockswg.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/warp-sockswg-watchdog
+EOF
+
+  cat > /etc/systemd/system/warp-sockswg-watchdog.timer <<'EOF'
+[Unit]
+Description=Run sockswg WARP health check every 30 seconds
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  if [ ! -e "$WATCHDOG_SETTINGS" ]; then
+    cat > "$WATCHDOG_SETTINGS" <<'EOF'
+HEALTH_FAIL_THRESHOLD=2
+ENDPOINT_FAILOVER_ENABLED=1
+ENDPOINT_PORTS="2408 4500 500 1701"
+RESTART_DELAY=5
+EOF
+  fi
+  [ -r "$watchdog_source" ] || watchdog_source=$WATCHDOG
+  [ -r "$watchdog_source" ] || die 'sockswg-watchdog is missing'
+  if [ "$(readlink -f "$watchdog_source")" != "$WATCHDOG" ]; then
+    install -m 755 "$watchdog_source" "$WATCHDOG"
+  else
+    chmod 755 "$WATCHDOG"
+  fi
+  systemctl daemon-reload
+}
+
+pause_watchdog() {
+  install -d -m 755 "$STATE_DIR"
+  : > "$STATE_DIR/disabled"
+}
+
+resume_watchdog() {
+  rm -f "$STATE_DIR"/disabled "$STATE_DIR"/failures-v4 "$STATE_DIR"/failures-v6
+  systemctl enable --now warp-sockswg-watchdog.timer >/dev/null
+}
+
+health_check() {
+  local port=$1 output4 output6
+  output4=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+    --socks5-hostname "127.0.0.1:$port" https://1.1.1.1/cdn-cgi/trace) || return 1
+  output6=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+    --socks5-hostname "127.0.0.1:$port" 'https://[2606:4700:4700::1111]/cdn-cgi/trace') || return 1
+  grep -Eq '^warp=(on|plus)$' <<< "$output4" || return 1
+  grep -Eq '^warp=(on|plus)$' <<< "$output6" || return 1
+  printf 'IPv4 %s, IPv6 %s\n' \
+    "$(awk -F= '/^(ip|warp)=/{printf "%s%s",sep,$2;sep="/"}' <<< "$output4")" \
+    "$(awk -F= '/^(ip|warp)=/{printf "%s%s",sep,$2;sep="/"}' <<< "$output6")"
+}
+
+health_check_retry() {
+  local port=$1 attempt
+  for attempt in 1 2 3; do
+    health_check "$port" && return 0
+    [ "$attempt" = 3 ] || sleep 2
+  done
+  return 1
+}
+
+wait_for_proxy() {
+  local port=$1 i
+  for i in $(seq 1 20); do
+    ss -lntH "sport = :$port" | grep -q . && return 0
+    sleep 1
+  done
+  return 1
+}
+
+start_stack() {
+  local port
+  systemctl enable --now wg-quick@sockswg.service
+  systemctl enable --now sockswg.service
+  port=$(awk '/^internal:/{print $NF; exit}' "$SOCKS_CONFIG")
+  wait_for_proxy "$port"
+}
+
+stop_stack() {
+  systemctl stop sockswg.service >/dev/null 2>&1 || true
+  systemctl stop wg-quick@sockswg.service >/dev/null 2>&1 || wg-quick down sockswg >/dev/null 2>&1 || true
+}
+
+install_stack() {
+  local port=${1:-$DEFAULT_PORT}
+  valid_port "$port" || die "invalid SOCKS port: $port"
+  [ -s "$SOURCE_CONFIG" ] || die "$SOURCE_CONFIG is required; install WireProxy once to create the WARP account first"
+  install_dependencies
+  pause_watchdog
+  stop_stack
+  write_configs "$port"
+  write_units
+  start_stack
+  if health_check_retry "$port"; then
+    resume_watchdog
+    info "healthy on 127.0.0.1:$port"
+  else
+    stop_stack
+    die 'IPv4/IPv6 WARP health check failed; sockswg was stopped'
+  fi
+}
+
+activate_stack() {
+  local port=${1:-$DEFAULT_PORT}
+  valid_port "$port" || die "invalid SOCKS port: $port"
+  [ -s "$WG_CONFIG" ] || die 'sockswg is not installed'
+  if ss -lntH "sport = :$port" | grep -q .; then
+    die "TCP port $port is already in use"
+  fi
+  pause_watchdog
+  stop_stack
+  sed -i -E "s#^(internal: 127\\.0\\.0\\.1 port = )[0-9]+#\\1$port#" "$SOCKS_CONFIG"
+  start_stack
+  health_check_retry "$port" || { stop_stack; die 'health check failed'; }
+  resume_watchdog
+  info "active on 127.0.0.1:$port"
+}
+
+migrate_wireproxy() {
+  local source_port temporary_port wireproxy_was_active=0
+  [ -s "$SOURCE_CONFIG" ] || die "$SOURCE_CONFIG is required"
+  source_port=$(awk -F: '/^[[:space:]]*BindAddress[[:space:]]*=/{gsub(/[[:space:]]/,"",$NF); print $NF; exit}' "$SOURCE_CONFIG")
+  valid_port "$source_port" || die "could not read the WireProxy SOCKS port from $SOURCE_CONFIG"
+  systemctl is-active --quiet wireproxy.service && wireproxy_was_active=1
+
+  temporary_port=$((source_port + 1))
+  [ "$temporary_port" -le 65535 ] || temporary_port=39999
+  while ss -lntH "sport = :$temporary_port" | grep -q .; do
+    temporary_port=$((temporary_port + 1))
+    [ "$temporary_port" -le 65535 ] || die 'could not find a temporary SOCKS port'
+  done
+
+  info "validating in parallel on 127.0.0.1:$temporary_port"
+  install_stack "$temporary_port"
+  pause_watchdog
+  stop_stack
+
+  install -d -m 755 /run/warp-wireproxy-watchdog
+  : > /run/warp-wireproxy-watchdog/disabled
+  systemctl disable --now warp-wireproxy-watchdog.timer >/dev/null 2>&1 || true
+  systemctl disable --now wireproxy.service >/dev/null 2>&1 || true
+  sed -i -E "s#^(internal: 127\\.0\\.0\\.1 port = )[0-9]+#\\1$source_port#" "$SOCKS_CONFIG"
+
+  if start_stack && health_check_retry "$source_port"; then
+    resume_watchdog
+    info "cutover complete on 127.0.0.1:$source_port; WireProxy is disabled and retained for rollback"
+    return 0
+  fi
+
+  info 'cutover failed; restoring WireProxy'
+  stop_stack
+  if [ "$wireproxy_was_active" = 1 ]; then
+    systemctl enable --now wireproxy.service
+    rm -f /run/warp-wireproxy-watchdog/disabled
+    systemctl enable --now warp-wireproxy-watchdog.timer >/dev/null 2>&1 || true
+  fi
+  die 'WireProxy was restored after failed sockswg cutover'
+}
+
+status_stack() {
+  local port='unknown'
+  [ -r "$SOCKS_CONFIG" ] && port=$(awk '/^internal:/{print $NF; exit}' "$SOCKS_CONFIG")
+  printf 'interface=%s socks=%s watchdog=%s port=%s\n' \
+    "$(systemctl is-active wg-quick@sockswg.service 2>/dev/null || true)" \
+    "$(systemctl is-active sockswg.service 2>/dev/null || true)" \
+    "$(systemctl is-active warp-sockswg-watchdog.timer 2>/dev/null || true)" "$port"
+  if [[ "$port" =~ ^[0-9]+$ ]] && systemctl is-active --quiet sockswg.service; then
+    health_check "$port"
+  fi
+}
+
+uninstall_stack() {
+  pause_watchdog
+  systemctl disable --now warp-sockswg-watchdog.timer >/dev/null 2>&1 || true
+  stop_stack
+  systemctl disable sockswg.service wg-quick@sockswg.service >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/sockswg.service
+  rm -f /etc/systemd/system/warp-sockswg-watchdog.service /etc/systemd/system/warp-sockswg-watchdog.timer
+  rm -f "$WATCHDOG" "$WATCHDOG_SETTINGS" "$WG_CONFIG"
+  rm -f /usr/local/sbin/sockswg-manager
+  rm -rf "$CONFIG_DIR" "$STATE_DIR"
+  systemctl daemon-reload
+  info 'uninstalled; WARP account and WireProxy files were retained'
+}
+
+require_root
+case "${1:-}" in
+  install) install_stack "${2:-$DEFAULT_PORT}" ;;
+  migrate) migrate_wireproxy ;;
+  activate) activate_stack "${2:-$DEFAULT_PORT}" ;;
+  on)
+    port=$(awk '/^internal:/{print $NF; exit}' "$SOCKS_CONFIG")
+    pause_watchdog
+    if start_stack && health_check_retry "$port"; then
+      resume_watchdog
+    else
+      stop_stack
+      die 'health check failed; sockswg was stopped'
+    fi
+    ;;
+  off)
+    pause_watchdog; stop_stack; info 'stopped'
+    ;;
+  status) status_stack ;;
+  uninstall) uninstall_stack ;;
+  *) die 'usage: sockswg-manager {install [port]|migrate|activate [port]|on|off|status|uninstall}' ;;
+esac

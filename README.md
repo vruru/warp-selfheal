@@ -4,7 +4,7 @@
 
 * * *
 
-> 本仓库是 [fscarmen/warp](https://gitlab.com/fscarmen/warp) 的 GPLv3 派生版，由 `vruru` 于 2026-08-28 修改。主要变化：WireProxy SOCKS 数据面持续健康检查、连续失败自动恢复，并接入安装、`warp y` 开关、自更新和卸载流程。原项目版权及 GPLv3 许可证保持不变。
+> 本仓库是 [fscarmen/warp](https://gitlab.com/fscarmen/warp) 的 GPLv3 派生版，由 `vruru` 于 2026-08-28 修改。主要变化：WireProxy SOCKS 数据面持续健康检查，以及高性能 `sockswg`（内核 WireGuard + 本机 SOCKS）分流模式。原项目版权及 GPLv3 许可证保持不变。
 
 自愈版一键安装或升级：
 
@@ -13,6 +13,17 @@ wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && ba
 ```
 
 全新安装 WireProxy 时，脚本会校验并使用仓库内的 `v1.1.3-selfheal.1` 修复构建，同时自动创建 watchdog；旧版建议先卸载干净再重新安装，不执行自动二进制升级。修复版不靠内存超限重启：它会在 SOCKS 连接的一侧结束后继续放行仍在传输的数据，只有另一侧连续静默两分钟才清理孤儿连接，同时把单方向复制缓冲区从 256 KiB 降到 32 KiB。`GOMEMLIMIT=160MiB` 仅辅助 Go 主动回收堆，不会触发进程重启。watchdog 会根据 WireProxy 配置分别强制检测 IPv4 与 IPv6；`warp=on`、`warp=plus` 都视为健康，同一栈连续失败两次才恢复服务，避免 IPv6 正常时掩盖 IPv4 故障。
+
+### sockswg 高性能 SOCKS 分流
+
+`sockswg` 保持应用原有的 `127.0.0.1:40000` SOCKS 分流方式，但把隧道数据面换成 Linux 内核 WireGuard，并由 Dante 提供仅监听本机的 SOCKS5。没有经过 SOCKS 的流量仍走 VPS 原生出口。相比单进程用户态 WireProxy，WireGuard 的加解密和转发在内核完成，适合多核、高连接数场景。
+
+```bash
+warp p       # 全新安装，或把当前 WireProxy 安全迁移为 sockswg
+warp q       # 开关 sockswg
+```
+
+迁移时先在空闲临时端口并行验证 WARP IPv4 和 IPv6，成功后才接管原 SOCKS 端口；失败会自动恢复 WireProxy。旧 WireProxy 二进制和配置会禁用并保留作回滚，不会继续占用端口。`sockswg` watchdog 每 30 秒分别检测两栈，服务/网卡消失会立即重建，连续两次数据面失败会依次轮换 `2408 → 4500 → 500 → 1701` UDP Endpoint 并复测。当前安装支持使用 systemd 的 Debian/Ubuntu。
 
 本仓库保留了上游完整历史和安装所需的 `api.sh`、WireProxy、wireguard-go、wgcf、warp-go、endpoint 等文件，并把脚本的运行时回源和自更新地址改为本仓库。原仓库中未包含但菜单会调用的 `warp_unlock` 与 `resolvconf` 也已连同各自许可证镜像到 [`vendor/`](vendor/README.md)；旧版 Docker 模式改为使用仓库内 Dockerfile 在本机生成镜像，不再拉取原作者镜像。因此原项目仓库下线后，已镜像的安装功能仍可从本仓库使用；Cloudflare API、系统软件源及第三方官方服务仍需联网。
 
@@ -36,6 +47,8 @@ wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && ba
 * * *
 
 ## 更新信息
+2026.08.28 menu.sh v3.2.7-selfheal.6 新增 `sockswg`：使用内核 WireGuard 承载 WARP，由 Dante 在本机提供 SOCKS5，保留 Soga 等应用既有的按规则 SOCKS 分流，同时绕开 WireProxy 单进程用户态数据面的性能上限。迁移采用临时端口双栈预检、失败自动回滚；独立 watchdog 支持服务拉起、IPv4/IPv6 分栈检测和官方 UDP Endpoint 轮换。
+
 2026.08.28 menu.sh v3.2.7-selfheal.5 增加 WireProxy Endpoint 自动故障转移：任意已配置栈连续检测失败达到阈值后，按 Cloudflare 官方 WireGuard 端口 `2408 → 4500 → 500 → 1701 → 2408` 轮换 Endpoint，再重启并复测。避免当前运营商或防火墙阻断某个 UDP 端口时只能手动修改配置；可通过 `/etc/default/warp-wireproxy-watchdog` 关闭或自定义端口顺序。
 
 2026.08.28 menu.sh v3.2.7-selfheal.4 修复 WireProxy 单栈故障漏检：watchdog 从配置自动识别 IPv4/IPv6，分别访问 Cloudflare 的 IPv4 与 IPv6 trace 地址并独立累计连续失败次数；任意已配置栈连续失败两次即恢复 WireProxy，`warp=on` 与 `warp=plus` 均视为健康。新增双栈、单栈、Plus 与交替故障回归测试。

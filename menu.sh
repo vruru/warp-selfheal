@@ -2,7 +2,7 @@
 
 # 当前脚本版本号
 # Modified 2026-08-28: add per-stack recovery and automatic official Endpoint port failover.
-VERSION='3.2.7-selfheal.5'
+VERSION='3.2.7-selfheal.6'
 
 # 派生版自更新地址。
 SELFHEAL_RAW_URL='https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh'
@@ -28,8 +28,8 @@ E[4]="Current operating system is: \$SYSTEM, Linux Client only supports Ubuntu, 
 C[4]="当前操作系统是: \$SYSTEM。 Linux Client 只支持 Ubuntu, Debian 和 CentOS，脚本中止，问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
 E[5]="The script supports Debian, Ubuntu, CentOS, Fedora, Arch or Alpine systems only. Feedback: [https://github.com/vruru/warp-selfheal/issues]"
 C[5]="本脚本只支持 Debian、Ubuntu、CentOS、Fedora、Arch 或 Alpine 系统,问题反馈:[https://github.com/vruru/warp-selfheal/issues]"
-E[6]="warp h (help)\n warp n (Get the WARP IP)\n warp o (Turn off WARP temporarily)\n warp u (Turn off and uninstall WARP interface and Socks5 Linux Client)\n warp b (Upgrade kernel, turn on BBR, change Linux system)\n warp v (Sync the latest version)\n warp r (Connect/Disconnect WARP Linux Client)\n warp 4/6 (Add WARP IPv4/IPv6 interface)\n warp d (Add WARP dualstack interface IPv4 + IPv6)\n warp c (Install WARP Linux Client and set to proxy mode)\n warp l (Install WARP Linux Client and set to WARP mode)\n warp i (Change the WARP IP to support Netflix)\n warp e (Install Iptables + dnsmasq + ipset solution)\n warp w (Install WireProxy solution)\n warp y (Connect/Disconnect WireProxy socks5)\n warp k (Switch between kernel and wireguard-go-reserved)\n warp g (Switch between warp global and non-global)\n warp s 4/6/d (Set stack proiority: IPv4 / IPv6 / VPS default)\n"
-C[6]="warp h (帮助菜单）\n warp n (获取 WARP IP)\n warp o (临时warp开关)\n warp u (卸载 WARP 网络接口和 Socks5 Client)\n warp b (升级内核、开启BBR及DD)\n warp v (同步脚本至最新版本)\n warp r (WARP Linux Client 开关)\n warp 4/6 (WARP IPv4/IPv6 单栈)\n warp d (WARP 双栈)\n warp c (安装 WARP Linux Client，开启 Socks5 代理模式)\n warp l (安装 WARP Linux Client，开启 WARP 模式)\n warp i (更换支持 Netflix 的IP)\n warp e (安装 Iptables + dnsmasq + ipset 解决方案)\n warp w (安装 WireProxy 解决方案)\n warp y (WireProxy socks5 开关)\n warp k (切换 wireguard 内核 / wireguard-go-reserved)\n warp g (切换 warp 全局 / 非全局)\n warp s 4/6/d (优先级: IPv4 / IPv6 / VPS default)\n"
+E[6]="warp h (help)\n warp n (Get the WARP IP)\n warp o (Turn off WARP temporarily)\n warp u (Turn off and uninstall WARP interface and Socks5 Linux Client)\n warp b (Upgrade kernel, turn on BBR, change Linux system)\n warp v (Sync the latest version)\n warp r (Connect/Disconnect WARP Linux Client)\n warp 4/6 (Add WARP IPv4/IPv6 interface)\n warp d (Add WARP dualstack interface IPv4 + IPv6)\n warp c (Install WARP Linux Client and set to proxy mode)\n warp l (Install WARP Linux Client and set to WARP mode)\n warp i (Change the WARP IP to support Netflix)\n warp e (Install Iptables + dnsmasq + ipset solution)\n warp w (Install WireProxy solution)\n warp y (Connect/Disconnect WireProxy socks5)\n warp p (Install or migrate to sockswg)\n warp q (Connect/Disconnect sockswg)\n warp k (Switch between kernel and wireguard-go-reserved)\n warp g (Switch between warp global and non-global)\n warp s 4/6/d (Set stack proiority: IPv4 / IPv6 / VPS default)\n"
+C[6]="warp h (帮助菜单）\n warp n (获取 WARP IP)\n warp o (临时warp开关)\n warp u (卸载 WARP 网络接口和 Socks5 Client)\n warp b (升级内核、开启BBR及DD)\n warp v (同步脚本至最新版本)\n warp r (WARP Linux Client 开关)\n warp 4/6 (WARP IPv4/IPv6 单栈)\n warp d (WARP 双栈)\n warp c (安装 WARP Linux Client，开启 Socks5 代理模式)\n warp l (安装 Cloudflare Client，开启 WARP 模式)\n warp i (更换支持 Netflix 的IP)\n warp e (安装 Iptables + dnsmasq + ipset 解决方案)\n warp w (安装 WireProxy 解决方案)\n warp y (WireProxy socks5 开关)\n warp p (安装或迁移到 sockswg)\n warp q (sockswg 开关)\n warp k (切换 wireguard 内核 / wireguard-go-reserved)\n warp g (切换 warp 全局 / 非全局)\n warp s 4/6/d (优先级: IPv4 / IPv6 / VPS default)\n"
 E[7]="Install dependence-list:"
 C[7]="安装依赖列表:"
 E[8]="All dependencies already exist and do not need to be installed additionally."
@@ -298,6 +298,20 @@ E[139]="Working mode:\n 1. Global (default)\n 2. Non-global"
 C[139]="工作模式:\n 1. 全局 (默认)\n 2. 非全局"
 E[140]="Failed to get a WARP IP with wireguard kernel. Switching to wireguard-go with reserved and retrying..."
 C[140]="使用 wireguard 内核获取 WARP IP 失败，正切换到 wireguard-go with reserved 重试……"
+E[141]="Install sockswg: kernel WireGuard WARP with a local SOCKS5 proxy (bash menu.sh p)"
+C[141]="安装 sockswg：内核 WireGuard WARP + 本机 SOCKS5 代理 (bash menu.sh p)"
+E[142]="Connect sockswg (warp q)"
+C[142]="连接 sockswg (warp q)"
+E[143]="Disconnect sockswg (warp q)"
+C[143]="断开 sockswg (warp q)"
+E[144]="sockswg is not installed."
+C[144]="sockswg 未安装"
+E[145]="sockswg is installed and disconnected"
+C[145]="sockswg 已安装，状态为断开连接"
+E[146]="sockswg is on"
+C[146]="sockswg 已开启"
+E[147]="sockswg installation currently supports Debian and Ubuntu systemd hosts."
+C[147]="sockswg 安装目前支持使用 systemd 的 Debian 和 Ubuntu"
 
 # 自定义字体彩色，read 函数
 warning() { echo -e "\033[31m\033[01m$*\033[0m"; }  # 红色
@@ -1120,6 +1134,21 @@ bbrInstall() {
 # 关闭 WARP 网络接口，并删除 WARP
 uninstall() {
   unset IP4 IP6 WAN4 WAN6 COUNTRY4 COUNTRY6 ASNORG4 ASNORG6
+  local SOCKSWG_WAS_INSTALLED=0
+
+  if [ -s /etc/wireguard/sockswg.conf ]; then
+    SOCKSWG_WAS_INSTALLED=1
+    if [ -x /usr/local/sbin/sockswg-manager ]; then
+      /usr/local/sbin/sockswg-manager uninstall
+    else
+      systemctl disable --now warp-sockswg-watchdog.timer sockswg.service wg-quick@sockswg.service >/dev/null 2>&1 || true
+      wg-quick down sockswg >/dev/null 2>&1 || true
+      rm -f /etc/systemd/system/{sockswg.service,warp-sockswg-watchdog.service,warp-sockswg-watchdog.timer}
+      rm -f /usr/local/sbin/{sockswg-manager,warp-sockswg-watchdog} /etc/default/warp-sockswg-watchdog
+      rm -rf /etc/sockswg /run/warp-sockswg-watchdog
+      systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+  fi
 
   # 卸载 WARP
   uninstall_warp() {
@@ -1184,6 +1213,7 @@ uninstall() {
     [[ $SYSTEM != "Arch" && $(dkms status 2>/dev/null) =~ wireguard ]] && UNINSTALL_DEPENDENCIES_LIST+=${UNINSTALL_NOT_ARCH[i]}
     [ -e /etc/dnsmasq.d/warp.conf ] && UNINSTALL_DEPENDENCIES_LIST+=${UNINSTALL_DNSMASQ[i]}
   done
+  [ "$SOCKSWG_WAS_INSTALLED" = 1 ] && UNINSTALL_DEPENDENCIES_LIST+=" dante-server "
 
   # 列出依赖，确认是手动还是自动卸载
   UNINSTALL_DEPENDENCIES_LIST=$(awk '{for(i=1;i<=NF;i++) if(!seen[$i]++) printf("%s%s",(c++?" ":""),$i)}' <<< "$UNINSTALL_DEPENDENCIES_LIST")
@@ -1840,6 +1870,48 @@ WIREPROXY_MEMORY_LIMIT_EOF
   [ "$WIREPROXY_WAS_ACTIVE" = 1 ] && wireproxy_watchdog_resume
 }
 
+sockswg_components_install() {
+  local component_dir
+  component_dir=$(mktemp -d /tmp/sockswg-components.XXXXXX) || return 1
+  if ! wget --no-check-certificate -T30 -t3 -qO "$component_dir/sockswg-manager" \
+      https://raw.githubusercontent.com/vruru/warp-selfheal/main/sockswg/sockswg-manager ||
+     ! wget --no-check-certificate -T30 -t3 -qO "$component_dir/sockswg-watchdog" \
+      https://raw.githubusercontent.com/vruru/warp-selfheal/main/sockswg/sockswg-watchdog; then
+    rm -rf "$component_dir"
+    error " Failed to download sockswg components "
+  fi
+  chmod 755 "$component_dir/sockswg-manager" "$component_dir/sockswg-watchdog"
+  SOCKSWG_COMPONENT_DIR=$component_dir
+}
+
+sockswg_solution() {
+  [[ "$SYSTEM" =~ ^(Debian|Ubuntu)$ ]] || error " $(text 147) "
+  [ -s /etc/wireguard/sockswg.conf ] && error " sockswg is already installed "
+
+  # Reuse the existing account/config creation path on a fresh host, then make
+  # an independently verified and automatically rolled-back kernel cutover.
+  if [ ! -s /etc/wireguard/proxy.conf ]; then
+    IS_PUFFERFFISH=is_pufferffish
+    install
+  fi
+
+  sockswg_components_install
+  "$SOCKSWG_COMPONENT_DIR/sockswg-manager" migrate
+  local result=$?
+  rm -rf "$SOCKSWG_COMPONENT_DIR"
+  [ "$result" = 0 ] && selfheal_persist_menu
+  return "$result"
+}
+
+sockswg_onoff() {
+  [ -x /usr/local/sbin/sockswg-manager ] || error " $(text 144) "
+  if systemctl is-active --quiet sockswg.service; then
+    /usr/local/sbin/sockswg-manager off
+  else
+    /usr/local/sbin/sockswg-manager on
+  fi
+}
+
 # WireProxy 开关，先检查是否已安装，再根据当前状态转向相反状态
 wireproxy_onoff() {
   local NO_OUTPUT="$1"
@@ -2104,6 +2176,20 @@ EOF
   if [ -x "$(type -p wireproxy)" ]; then
     WIREPROXY=1
     [ "$WIREPROXY" = 1 ] && WIREPROXY_INSTALLED="$(text 92)" && [[ "$(ss -nltp | awk '{print $NF}' | awk -F \" '{print $2}')" =~ wireproxy ]] && WIREPROXY=2 && ip_case d wireproxy
+  fi
+
+  # sockswg keeps the old WireProxy binary/config for rollback, so do not show
+  # that deliberately disabled binary as an active installation in the menu.
+  SOCKSWG=0
+  if [ -s /etc/wireguard/sockswg.conf ] && [ -s /etc/sockswg/sockd.conf ]; then
+    SOCKSWG=1
+    SOCKSWG_PORT=$(awk '/^internal:/{print $NF; exit}' /etc/sockswg/sockd.conf)
+    SOCKSWG_INSTALLED="$(text 92)"
+    if systemctl is-active --quiet sockswg.service && ss -lntH "sport = :$SOCKSWG_PORT" | grep -q .; then
+      SOCKSWG=2
+    fi
+    WIREPROXY=0
+    WIREPROXY_INSTALLED=''
   fi
 }
 
@@ -3064,6 +3150,10 @@ wireproxy_solution() {
 
 # 判断当前 WARP 网络接口及 Client 的运行状态，并对应的给菜单和动作赋值
 menu_setting() {
+  SOCKSWG_MENU_TEXT="$(text 141)"
+  [ "$SOCKSWG" = 1 ] && SOCKSWG_MENU_TEXT="$(text 142)"
+  [ "$SOCKSWG" = 2 ] && SOCKSWG_MENU_TEXT="$(text 143)"
+
   if [[ "$CLIENT" -gt 1 || "$WIREPROXY" -gt 0 ]]; then
     [ "$CLIENT" -lt 3 ] && MENU_OPTION[1]="$(printf '%3d.' 1) $(text 88)" || MENU_OPTION[1]="$(printf '%3d.' 1) $(text 89)"
     [ "$WIREPROXY" -lt 2 ] && MENU_OPTION[2]="$(printf '%3d.' 2) $(text 127)" || MENU_OPTION[2]="$(printf '%3d.' 2) $(text 128)"
@@ -3106,6 +3196,7 @@ menu_setting() {
         MENU_OPTION[10]="$(printf '%3d.' 10) ${IPTABLE_INSTALLED}$(text 57)"
         MENU_OPTION[11]="$(printf '%3d.' 11) ${WIREPROXY_INSTALLED}$(text 113)"
         MENU_OPTION[12]="$(printf '%3d.' 12) ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
+        MENU_OPTION[13]="$(printf '%3d.' 13) $SOCKSWG_MENU_TEXT"
         MENU_OPTION[0]="$(printf '%3d.' 0) $(text 76)"
 
         ACTION[3]() { OPTION=o; onoff; }
@@ -3114,6 +3205,7 @@ menu_setting() {
         ACTION[10]() { IS_ANEMONE=is_anemone ;install; };
         ACTION[11]() { IS_PUFFERFFISH=is_pufferffish; install; };
         ACTION[12]() { IS_LUBAN=is_luban; client_install; };
+        ACTION[13]() { [ "$SOCKSWG" = 0 ] && sockswg_solution || sockswg_onoff; };
         ACTION[0]() { exit; }
         return
     esac
@@ -3134,6 +3226,7 @@ menu_setting() {
   MENU_OPTION[11]="$(printf '%3d.' 11) ${IPTABLE_INSTALLED}$(text 57)"
   MENU_OPTION[12]="$(printf '%3d.' 12) ${WIREPROXY_INSTALLED}$(text 113)"
   MENU_OPTION[13]="$(printf '%3d.' 13) ${CLIENT_INSTALLED}${CLIENT_NOT_ALLOWED_ARCHITECTURE}$(text 132)"
+  MENU_OPTION[14]="$(printf '%3d.' 14) $SOCKSWG_MENU_TEXT"
   MENU_OPTION[0]="$(printf '%3d.' 0) $(text 76)"
 
   ACTION[4]() { OPTION=o; onoff; }
@@ -3142,6 +3235,7 @@ menu_setting() {
   ACTION[11]() { IS_ANEMONE=is_anemone ;install; };
   ACTION[12]() { IS_PUFFERFFISH=is_pufferffish; install; };
   ACTION[13]() { IS_LUBAN=is_luban; client_install; };
+  ACTION[14]() { [ "$SOCKSWG" = 0 ] && sockswg_solution || sockswg_onoff; };
   ACTION[0]() { exit; }
   }
 
@@ -3183,6 +3277,11 @@ menu() {
       ;;
     2 )
       info "\t WARP$WIREPROXY_ACCOUNT $(text 124)\t $(text 27): $WIREPROXY_SOCKS5\n\t IPv4: $WIREPROXY_WAN4 $WIREPROXY_COUNTRY4 $WIREPROXY_ASNORG4\n\t IPv6: $WIREPROXY_WAN6 $WIREPROXY_COUNTRY6 $WIREPROXY_ASNORG6 "
+  esac
+  case "$SOCKSWG" in
+    0 ) info "\t $(text 144) " ;;
+    1 ) info "\t $(text 145)\t $(text 27): 127.0.0.1:$SOCKSWG_PORT " ;;
+    2 ) info "\t $(text 146)\t $(text 27): 127.0.0.1:$SOCKSWG_PORT " ;;
   esac
    echo -e "\n======================================================================================================================\n"
   for ((h=1; h<${#MENU_OPTION[*]}; h++)); do hint " ${MENU_OPTION[h]} "; done
@@ -3259,8 +3358,11 @@ case "$OPTION" in
   y )
     wireproxy_onoff; exit 0
     ;;
+  q )
+    sockswg_onoff; exit 0
+    ;;
   k )
-    [ -x "$(type -p wireproxy)" ] && wireproxy_watchdog_install
+    [ -x "$(type -p wireproxy)" ] && [ ! -s /etc/wireguard/sockswg.conf ] && wireproxy_watchdog_install
     exit 0
 esac
 
@@ -3271,9 +3373,11 @@ check_virt $SYSTEM
 check_system_info
 
 # 用派生版覆盖旧安装时，持久化本脚本并自动补齐或升级 WireProxy watchdog
-if [ -x "$(type -p wireproxy)" ]; then
+if [ -x "$(type -p wireproxy)" ] && [ ! -s /etc/wireguard/sockswg.conf ]; then
   selfheal_persist_menu
   wireproxy_watchdog_install
+elif [ -s /etc/wireguard/sockswg.conf ]; then
+  selfheal_persist_menu
 fi
 
 # 提前准备最佳 MTU
@@ -3315,6 +3419,9 @@ case "$OPTION" in
     ;;
   w )
     wireproxy_solution
+    ;;
+  p|sockswg )
+    sockswg_solution
     ;;
   k )
     kernel_reserved_switch

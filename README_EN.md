@@ -4,7 +4,7 @@ English | [中文](README.md)
 
 * * *
 
-> This repository is a GPLv3 derivative of [fscarmen/warp](https://gitlab.com/fscarmen/warp), modified by `vruru` on 2026-08-28. The main change is persistent WireProxy SOCKS data-plane health checking with automatic recovery, integrated with installation, the `warp y` switch, self-update, and uninstall. The original copyright notices and GPLv3 license are preserved.
+> This repository is a GPLv3 derivative of [fscarmen/warp](https://gitlab.com/fscarmen/warp), modified by `vruru` on 2026-08-28. Its additions include persistent WireProxy health checking and the high-performance `sockswg` mode (kernel WireGuard plus a local SOCKS proxy). The original copyright notices and GPLv3 license are preserved.
 
 Install or upgrade the self-healing edition:
 
@@ -13,6 +13,17 @@ wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && ba
 ```
 
 A fresh WireProxy installation verifies and uses the repository's patched `v1.1.3-selfheal.1` build and installs the watchdog automatically. Existing legacy installations should be removed cleanly before reinstalling; the script does not perform an automatic binary upgrade. The memory fix does not restart WireProxy at an RSS threshold. When one side of a SOCKS connection ends, traffic still flowing in the opposite direction is preserved; only a side that remains silent for two minutes is reclaimed. Per-direction copy buffers are reduced from 256 KiB to 32 KiB. `GOMEMLIMIT=160MiB` only encourages Go heap reclamation and never triggers a restart. The watchdog infers configured stacks from the WireProxy configuration and checks IPv4 and IPv6 separately. Both `warp=on` and `warp=plus` are healthy, and the service is recovered only after two consecutive failures of the same stack, so working IPv6 can no longer hide broken IPv4.
+
+### High-performance sockswg split routing
+
+`sockswg` preserves the existing local SOCKS routing model (normally `127.0.0.1:40000`) while moving WARP encryption and packet forwarding into the Linux kernel. Dante provides the loopback-only SOCKS5 listener, and traffic not sent to that listener keeps the VPS native egress.
+
+```bash
+warp p       # install, or safely migrate the current WireProxy instance
+warp q       # toggle sockswg
+```
+
+Migration validates both WARP IPv4 and IPv6 on a temporary port before taking over the original SOCKS port. Any failure restores WireProxy automatically. The independent watchdog checks both stacks every 30 seconds, reconstructs an inactive service/interface immediately, and rotates through the official UDP Endpoint ports after two consecutive data-plane failures. Installation currently supports Debian/Ubuntu systemd hosts.
 
 This repository retains the complete upstream history and the runtime files used by installation, including `api.sh`, WireProxy, wireguard-go, wgcf, warp-go, and endpoint assets. Runtime fetches and self-updates now point to this repository. Dependencies previously fetched from separate original projects (`warp_unlock` and `resolvconf`) are mirrored with their licenses under [`vendor/`](vendor/README.md). The legacy Docker mode now builds its image locally from the repository's Dockerfile instead of pulling the original author's image. The mirrored installation paths therefore remain available if the original repository disappears; Cloudflare APIs, OS package repositories, and independent third-party services still require network access.
 
@@ -36,6 +47,8 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
+2026.08.28 menu.sh v3.2.7-selfheal.6 Add `sockswg`, combining kernel WireGuard WARP with a loopback-only Dante SOCKS5 proxy. Existing Soga-style SOCKS routing remains unchanged while the single-process userspace WireProxy data plane is bypassed. Migration performs dual-stack validation on a temporary port with automatic rollback, and the watchdog provides service recovery, per-stack checks, and Endpoint failover.
+
 2026.08.28 menu.sh v3.2.7-selfheal.5 Add automatic WireProxy Endpoint failover. Once any configured stack reaches the consecutive health-failure threshold, the watchdog rotates through Cloudflare's official WireGuard ports in the order `2408 → 4500 → 500 → 1701 → 2408`, then restarts and verifies the tunnel. This avoids manual configuration edits when an ISP or firewall blocks one UDP port. The feature and port order are configurable in `/etc/default/warp-wireproxy-watchdog`.
 
 2026.08.28 menu.sh v3.2.7-selfheal.4 Fix missed single-stack WireProxy failures. The watchdog now discovers configured IPv4/IPv6 stacks, forces separate Cloudflare trace checks, and tracks consecutive failures independently. Two failures of any configured stack trigger recovery; both `warp=on` and `warp=plus` remain healthy. Adds regression coverage for dual-stack, single-stack, Plus, and alternating failures.

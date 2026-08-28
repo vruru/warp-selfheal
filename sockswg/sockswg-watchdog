@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+
+set -u
+
+PATH="${WATCHDOG_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+SETTINGS_FILE="${SETTINGS_FILE:-/etc/default/warp-sockswg-watchdog}"
+[ -r "$SETTINGS_FILE" ] && . "$SETTINGS_FILE"
+
+STATE_DIR="${STATE_DIR:-/run/warp-sockswg-watchdog}"
+CONFIG_FILE="${CONFIG_FILE:-/etc/wireguard/sockswg.conf}"
+SOCKS_CONFIG="${SOCKS_CONFIG:-/etc/sockswg/sockd.conf}"
+HEALTH_FAIL_THRESHOLD="${HEALTH_FAIL_THRESHOLD:-${FAIL_THRESHOLD:-2}}"
+RESTART_DELAY="${RESTART_DELAY:-5}"
+ENDPOINT_FAILOVER_ENABLED="${ENDPOINT_FAILOVER_ENABLED:-1}"
+ENDPOINT_PORTS="${ENDPOINT_PORTS:-2408 4500 500 1701}"
+FAIL_FILE_V4="$STATE_DIR/failures-v4"
+FAIL_FILE_V6="$STATE_DIR/failures-v6"
+LOCK_FILE="$STATE_DIR/lock"
+DISABLE_FILE="$STATE_DIR/disabled"
+
+log_message() {
+  logger -t warp-sockswg-watchdog -- "$*"
+}
+
+mkdir -p "$STATE_DIR"
+[ -e "$DISABLE_FILE" ] && exit 0
+
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || exit 0
+fi
+
+if ! [[ "$HEALTH_FAIL_THRESHOLD" =~ ^[1-9][0-9]*$ ]]; then
+  log_message "Invalid HEALTH_FAIL_THRESHOLD: $HEALTH_FAIL_THRESHOLD"
+  exit 1
+fi
+if ! [[ "$RESTART_DELAY" =~ ^[0-9]+$ ]]; then
+  log_message "Invalid RESTART_DELAY: $RESTART_DELAY"
+  exit 1
+fi
+if ! [[ "$ENDPOINT_FAILOVER_ENABLED" =~ ^[01]$ ]]; then
+  log_message "Invalid ENDPOINT_FAILOVER_ENABLED: $ENDPOINT_FAILOVER_ENABLED"
+  exit 1
+fi
+for endpoint_port in $ENDPOINT_PORTS; do
+  if ! [[ "$endpoint_port" =~ ^[0-9]+$ ]] || [ "$endpoint_port" -lt 1 ] || [ "$endpoint_port" -gt 65535 ]; then
+    log_message "Invalid port in ENDPOINT_PORTS: $endpoint_port"
+    exit 1
+  fi
+done
+
+if [ ! -r "$CONFIG_FILE" ] || [ ! -r "$SOCKS_CONFIG" ]; then
+  log_message "sockswg configuration is not readable"
+  exit 1
+fi
+
+port=$(awk '
+  /^[[:space:]]*internal:[[:space:]]*127\.0\.0\.1[[:space:]]+port[[:space:]]*=/ {
+    value=$0
+    sub(/^.*port[[:space:]]*=[[:space:]]*/, "", value)
+    sub(/[[:space:]#].*$/, "", value)
+    print value
+    exit
+  }
+' "$SOCKS_CONFIG")
+if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+  log_message "Could not determine a valid SOCKS port from $SOCKS_CONFIG"
+  exit 1
+fi
+
+interface_addresses=$(awk -F '=' '
+  /^[[:space:]]*Address[[:space:]]*=/ {
+    value=$2
+    sub(/[;#].*$/, "", value)
+    print value
+  }
+' "$CONFIG_FILE")
+HAS_IPV4=0
+HAS_IPV6=0
+grep -Eq '(^|[[:space:],])([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]+' <<< "$interface_addresses" && HAS_IPV4=1
+grep -Eq '(^|[[:space:],])[[:xdigit:]:]+/[0-9]+' <<< "$interface_addresses" && HAS_IPV6=1
+if [ "$HAS_IPV4" = 0 ] && [ "$HAS_IPV6" = 0 ]; then
+  log_message "Could not determine any configured IP stack from $CONFIG_FILE"
+  exit 1
+fi
+
+sockswg_is_active() {
+  systemctl is-active --quiet wg-quick@sockswg.service &&
+    systemctl is-active --quiet sockswg.service &&
+    ip link show dev sockswg >/dev/null 2>&1
+}
+
+restart_sockswg() {
+  systemctl restart wg-quick@sockswg.service
+  systemctl restart sockswg.service
+}
+
+rotate_endpoint_port() {
+  local endpoint endpoint_host current_port first_port='' next_port=''
+  local previous_was_current=0 candidate temporary_config
+
+  [ "$ENDPOINT_FAILOVER_ENABLED" = 1 ] || return 1
+  endpoint=$(awk -F '=' '
+    /^[[:space:]]*Endpoint[[:space:]]*=/ {
+      value=$2
+      sub(/[;#].*$/, "", value)
+      gsub(/[[:space:]]/, "", value)
+      print value
+      exit
+    }
+  ' "$CONFIG_FILE")
+  endpoint_host=${endpoint%:*}
+  current_port=${endpoint##*:}
+  if [ -z "$endpoint_host" ] || ! [[ "$current_port" =~ ^[0-9]+$ ]]; then
+    log_message "Could not rotate an invalid sockswg Endpoint: $endpoint"
+    return 1
+  fi
+
+  for candidate in $ENDPOINT_PORTS; do
+    [ -n "$first_port" ] || first_port=$candidate
+    if [ "$previous_was_current" = 1 ]; then
+      next_port=$candidate
+      break
+    fi
+    [ "$candidate" = "$current_port" ] && previous_was_current=1
+  done
+  [ -n "$next_port" ] || next_port=$first_port
+  [ -n "$next_port" ] && [ "$next_port" != "$current_port" ] || return 1
+
+  temporary_config=$(mktemp "${CONFIG_FILE}.endpoint.XXXXXX") || return 1
+  if awk -v replacement="$endpoint_host:$next_port" '
+    !updated && /^[[:space:]]*Endpoint[[:space:]]*=/ {
+      print "Endpoint = " replacement
+      updated=1
+      next
+    }
+    { print }
+    END { if (!updated) exit 1 }
+  ' "$CONFIG_FILE" > "$temporary_config"; then
+    cat "$temporary_config" > "$CONFIG_FILE"
+    rm -f "$temporary_config"
+    log_message "Rotated sockswg Endpoint from $endpoint_host:$current_port to $endpoint_host:$next_port"
+    return 0
+  fi
+  rm -f "$temporary_config"
+  return 1
+}
+
+check_warp_stack() {
+  local family=$1 output url
+  case "$family" in
+    4) url='https://1.1.1.1/cdn-cgi/trace' ;;
+    6) url='https://[2606:4700:4700::1111]/cdn-cgi/trace' ;;
+    *) return 1 ;;
+  esac
+  output=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 12 \
+    --socks5-hostname "127.0.0.1:$port" "$url" 2>/dev/null) || return 1
+  grep -Eq '^warp=(on|plus)$' <<< "$output"
+}
+
+failure_file_for() {
+  case "$1" in
+    4) printf '%s\n' "$FAIL_FILE_V4" ;;
+    6) printf '%s\n' "$FAIL_FILE_V6" ;;
+    *) return 1 ;;
+  esac
+}
+
+reset_failures() {
+  printf '0\n' > "$(failure_file_for "$1")"
+}
+
+increment_failures() {
+  local file failures=0
+  file=$(failure_file_for "$1") || return 1
+  [ -r "$file" ] && read -r failures < "$file" || true
+  [[ "$failures" =~ ^[0-9]+$ ]] || failures=0
+  failures=$((failures + 1))
+  printf '%s\n' "$failures" > "$file"
+  printf '%s\n' "$failures"
+}
+
+reset_all_failures() {
+  [ "$HAS_IPV4" = 1 ] && reset_failures 4
+  [ "$HAS_IPV6" = 1 ] && reset_failures 6
+}
+
+check_all_configured_stacks() {
+  FAILED_STACKS=''
+  if [ "$HAS_IPV4" = 1 ] && ! check_warp_stack 4; then FAILED_STACKS='IPv4'; fi
+  if [ "$HAS_IPV6" = 1 ] && ! check_warp_stack 6; then
+    [ -n "$FAILED_STACKS" ] && FAILED_STACKS="$FAILED_STACKS,IPv6" || FAILED_STACKS='IPv6'
+  fi
+  [ -z "$FAILED_STACKS" ]
+}
+
+if ! sockswg_is_active; then
+  log_message "sockswg service or interface is inactive; restarting immediately"
+  restart_sockswg
+  reset_all_failures
+  sleep "$RESTART_DELAY"
+  if check_all_configured_stacks; then
+    log_message "sockswg recovered after service restart"
+    exit 0
+  fi
+  log_message "sockswg is still unhealthy after service restart: $FAILED_STACKS"
+  exit 1
+fi
+
+TRIGGER_STACKS=''
+for family in 4 6; do
+  eval "has_stack=\$HAS_IPV$family"
+  [ "$has_stack" = 1 ] || continue
+  if check_warp_stack "$family"; then
+    reset_failures "$family"
+  else
+    failures=$(increment_failures "$family")
+    log_message "WARP IPv$family sockswg health check failed ($failures/$HEALTH_FAIL_THRESHOLD)"
+    if [ "$failures" -ge "$HEALTH_FAIL_THRESHOLD" ]; then
+      [ -n "$TRIGGER_STACKS" ] && TRIGGER_STACKS="$TRIGGER_STACKS,IPv$family" || TRIGGER_STACKS="IPv$family"
+    fi
+  fi
+done
+[ -z "$TRIGGER_STACKS" ] && exit 0
+
+rotate_endpoint_port || true
+log_message "Failure threshold reached for $TRIGGER_STACKS; restarting sockswg"
+restart_sockswg
+reset_all_failures
+sleep "$RESTART_DELAY"
+if check_all_configured_stacks; then
+  log_message "sockswg recovered after restart"
+  exit 0
+fi
+log_message "sockswg is still unhealthy after restart: $FAILED_STACKS"
+exit 1
