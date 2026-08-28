@@ -27,9 +27,9 @@ warp q       # 开关 sockswg
 
 #### sockswg IPv4 蓝绿灾备（Debian 12/Dante 试运行）
 
-`sockswg-bluegreen` 在同一台 VPS 上保留当前 A 隧道，并在独立网络命名空间中运行纯 IPv4 的 B 隧道。iptables 连接跟踪只把新 SOCKS 连接切到另一槽，已经建立的 TCP 连接继续沿原隧道传输并自然排空。每 20 秒同时检查 Cloudflare 地区、`warp=on/plus` 和 Google HTTP 状态；活动槽连续失败两次才切换，恢复后连续通过两次才回到优先 A。
+`sockswg-bluegreen` 在同一台 VPS 上保留当前 A 隧道，并在独立网络命名空间中运行纯 IPv4 的 B 隧道。安装时从 A 自动识别并保存期望地区。iptables 连接跟踪只把新 SOCKS 连接切到另一槽，已经建立的 TCP 连接继续沿原隧道传输并自然排空。每 20 秒同时检查 Cloudflare 地区、`warp=on/plus` 和 Google HTTP 状态；活动槽连续失败两次才切换，恢复后连续通过两次才回到优先 A。
 
-空闲槽不合格时，管理器先轮换 Endpoint 并重连同一个 Peer，连续验收地区、Google 非 `429` 以及与活动槽的出口差异；多次失败后才注销并注册候选 Peer，失败候选会注销并回滚。WARP 出口由 Cloudflare 分配，蓝绿机制提高可用性但不能保证永久固定或无限生成不同公网 IP。
+空闲槽不合格时，管理器先轮换 Endpoint 并重连同一个 Peer，连续验收地区、Google 非 `429` 以及与活动槽的出口差异；多次失败后才注销并注册候选 Peer，失败候选会注销并回滚。候选另外记录 Google/YouTube 地区：与该机 WARP 地区一致为 `optimal`，Google 可访问但地区不同（包括 `.com.hk`）为 `usable`，两级都可用于灾备。WARP 出口由 Cloudflare 分配，蓝绿机制提高可用性但不能保证永久固定或无限生成不同公网 IP。
 
 当前试运行仅支持已有 Dante 后端的 Debian 12 `sockswg`，尚未默认集成到 `warp p`；Debian 13/MicroSocks 完成独立验证前不要批量启用。
 

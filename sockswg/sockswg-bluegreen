@@ -34,7 +34,7 @@ DESIRED_LOC=JP
 FAIL_THRESHOLD=2
 RECOVER_THRESHOLD=2
 PREFER_A=yes
-ROTATE_INTERVAL=300
+ROTATE_INTERVAL=3600
 CANDIDATE_FAIL_THRESHOLD=3
 DRAIN_MIN_SECONDS=120
 DRAIN_CONNECTION_THRESHOLD=20
@@ -277,8 +277,62 @@ trace_via() {
 google_code_via() {
   local proxy=$1
   shift
-  "$@" curl -4ksS -o /dev/null -w '%{http_code}' --max-time 12 \
-    --socks5-hostname "$proxy" https://www.google.com/
+  local result code redirect
+  result=$("$@" curl -4ksS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 12 \
+    --socks5-hostname "$proxy" https://www.google.com/)
+  code=${result%% *}
+  redirect=${result#* }
+  if [[ "$redirect" == *'/sorry/'* ]]; then
+    printf '429\n'
+  else
+    printf '%s\n' "$code"
+  fi
+}
+
+youtube_region_via() {
+  local proxy=$1
+  shift
+  "$@" curl -4ksS --compressed --max-time 18 --socks5-hostname "$proxy" \
+    'https://www.youtube.com/premium?hl=en' 2>/dev/null |
+    grep -oE '"GL":"[A-Z]{2}"' | head -n1 | cut -d'"' -f4
+}
+
+google_target_via() {
+  local proxy=$1
+  shift
+  local location
+  location=$("$@" curl -4ksSI --max-time 12 --socks5-hostname "$proxy" \
+    https://www.google.com/ 2>/dev/null |
+    awk 'BEGIN{IGNORECASE=1} /^location:/ {gsub("\\r", ""); print $2; exit}')
+  if [ -n "$location" ]; then
+    sed -E 's#^[a-z]+://([^/]+).*#\1#' <<<"$location"
+  else
+    printf 'google.com\n'
+  fi
+}
+
+assess_quality() {
+  local slot=$1 proxy region target tier
+  local -a runner=()
+  if [ "$slot" = a ]; then
+    proxy="127.0.0.1:$FRONT_PORT"
+    runner=(runuser -u "$CHECK_USER" --)
+  else
+    proxy="$NS_IP:$BACKEND_B_PORT"
+  fi
+  "health_$slot" >/dev/null || return 1
+  region=$(youtube_region_via "$proxy" "${runner[@]}" || true)
+  target=$(google_target_via "$proxy" "${runner[@]}" || true)
+  tier=usable
+  [ "$region" = "$DESIRED_LOC" ] && tier=optimal
+  cat > "$BASE_DIR/quality-$slot" <<EOF
+tier=$tier
+warp_loc=$DESIRED_LOC
+google_region=${region:-unknown}
+google_target=${target:-unknown}
+checked_at=$(date +%s)
+EOF
+  printf '%s\n' "$tier"
 }
 
 health_result() {
@@ -336,6 +390,7 @@ validate_candidate() {
     log "candidate $slot was rejected because its public IP did not change: $candidate_ip"
     return 1
   }
+  assess_quality "$slot" >/dev/null || return 1
   printf '%s\n' "$candidate_ip"
 }
 
@@ -611,6 +666,8 @@ status() {
     "$(iptables -t nat -S OUTPUT | grep -c -- "$SELECTOR_COMMENT" || true)" \
     "$(a_connection_count)"
   printf 'a_ip=%s b_ip=%s diverse=%s\n' "${a_ip:-unavailable}" "${b_ip:-unavailable}" "$diverse"
+  [ -s "$BASE_DIR/quality-a" ] && printf 'A_quality %s\n' "$(tr '\n' ' ' < "$BASE_DIR/quality-a")"
+  [ -s "$BASE_DIR/quality-b" ] && printf 'B_quality %s\n' "$(tr '\n' ' ' < "$BASE_DIR/quality-b")"
   show_test a || true
   show_test b || true
 }
@@ -676,6 +733,29 @@ EOF
   systemctl daemon-reload
 }
 
+ensure_settings() {
+  [ -s "$SETTINGS_FILE" ] && return 0
+  local trace detected_loc
+  trace=$(trace_via "127.0.0.1:$FRONT_PORT" runuser -u "$CHECK_USER" -- 2>/dev/null) || \
+    die 'could not detect the primary A location'
+  detected_loc=$(awk -F= '$1 == "loc" {print $2; exit}' <<<"$trace")
+  [[ "$detected_loc" =~ ^[A-Z]{2}$ ]] || die 'primary A returned an invalid location code'
+  DESIRED_LOC=$detected_loc
+  cat > "$SETTINGS_FILE" <<EOF
+# Auto-detected from the existing primary A path during installation.
+DESIRED_LOC=$DESIRED_LOC
+FAIL_THRESHOLD=$FAIL_THRESHOLD
+RECOVER_THRESHOLD=$RECOVER_THRESHOLD
+PREFER_A=$PREFER_A
+ROTATE_INTERVAL=$ROTATE_INTERVAL
+CANDIDATE_FAIL_THRESHOLD=$CANDIDATE_FAIL_THRESHOLD
+DRAIN_MIN_SECONDS=$DRAIN_MIN_SECONDS
+DRAIN_CONNECTION_THRESHOLD=$DRAIN_CONNECTION_THRESHOLD
+EOF
+  chmod 644 "$SETTINGS_FILE"
+  log "using auto-detected desired WARP location: $DESIRED_LOC"
+}
+
 install_all() {
   require_root
   command -v danted >/dev/null || die 'danted is required'
@@ -684,6 +764,7 @@ install_all() {
   if ! id -u "$CHECK_USER" >/dev/null 2>&1; then
     useradd --system --no-create-home --shell /usr/sbin/nologin "$CHECK_USER"
   fi
+  ensure_settings
   ensure_account_b
   write_b_config
   [ -s "$ENDPOINT_B_FILE" ] || printf '%s\n' "$WARP_ENDPOINT" > "$ENDPOINT_B_FILE"
@@ -695,6 +776,8 @@ install_all() {
   apply_active
   systemctl enable --now sockswg-bluegreen-check.timer >/dev/null
   show_test b || die 'standby B installation completed but health validation failed'
+  assess_quality a >/dev/null || true
+  assess_quality b >/dev/null || true
   log 'blue/green standby installed; primary A remains active'
 }
 
@@ -710,8 +793,10 @@ case "${1:-}" in
   refresh-b) refresh_b "${2:-3}" ;;
   repair-a) repair_a ;;
   repair-b) repair_b ;;
+  assess-a) assess_quality a ;;
+  assess-b) assess_quality b ;;
   test-a) show_test a ;;
   test-b) show_test b ;;
   status) status ;;
-  *) die 'usage: sockswg-bluegreen {install|prepare-b|cleanup-b|switch-a|switch-b|apply-active|check|repair-a|repair-b|refresh-a [attempts]|refresh-b [attempts]|test-a|test-b|status}' ;;
+  *) die 'usage: sockswg-bluegreen {install|prepare-b|cleanup-b|switch-a|switch-b|apply-active|check|repair-a|repair-b|refresh-a [attempts]|refresh-b [attempts]|assess-a|assess-b|test-a|test-b|status}' ;;
 esac
