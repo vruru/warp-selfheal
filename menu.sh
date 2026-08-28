@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-# Modified 2026-08-28: fix orphaned WireProxy SOCKS connections and add per-stack data-plane recovery.
-VERSION='3.2.7-selfheal.4'
+# Modified 2026-08-28: add per-stack recovery and automatic official Endpoint port failover.
+VERSION='3.2.7-selfheal.5'
 
 # 派生版自更新地址。
 SELFHEAL_RAW_URL='https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh'
@@ -1445,6 +1445,11 @@ wireproxy_watchdog_install() {
 # Consecutive failures of the same configured IP stack before restarting WireProxy.
 HEALTH_FAIL_THRESHOLD=2
 
+# Cloudflare WireGuard uses UDP 2408 by default and officially supports these
+# fallback ports. Rotate only after the configured health-failure threshold.
+ENDPOINT_FAILOVER_ENABLED=1
+ENDPOINT_PORTS="2408 4500 500 1701"
+
 # Go runtime soft memory limit. This is supplementary to the connection leak
 # fix in the bundled WireProxy build and does not restart the process.
 GOMEMLIMIT=160MiB
@@ -1465,6 +1470,8 @@ STATE_DIR="${STATE_DIR:-/run/warp-wireproxy-watchdog}"
 CONFIG_FILE="${CONFIG_FILE:-/etc/wireguard/proxy.conf}"
 HEALTH_FAIL_THRESHOLD="${HEALTH_FAIL_THRESHOLD:-${FAIL_THRESHOLD:-2}}"
 RESTART_DELAY="${RESTART_DELAY:-5}"
+ENDPOINT_FAILOVER_ENABLED="${ENDPOINT_FAILOVER_ENABLED:-1}"
+ENDPOINT_PORTS="${ENDPOINT_PORTS:-2408 4500 500 1701}"
 FAIL_FILE_V4="$STATE_DIR/failures-v4"
 FAIL_FILE_V6="$STATE_DIR/failures-v6"
 LEGACY_FAIL_FILE="$STATE_DIR/failures"
@@ -1492,6 +1499,18 @@ if ! [[ "$RESTART_DELAY" =~ ^[0-9]+$ ]]; then
   log_message "Invalid RESTART_DELAY: $RESTART_DELAY"
   exit 1
 fi
+
+if ! [[ "$ENDPOINT_FAILOVER_ENABLED" =~ ^[01]$ ]]; then
+  log_message "Invalid ENDPOINT_FAILOVER_ENABLED: $ENDPOINT_FAILOVER_ENABLED"
+  exit 1
+fi
+
+for endpoint_port in $ENDPOINT_PORTS; do
+  if ! [[ "$endpoint_port" =~ ^[0-9]+$ ]] || [ "$endpoint_port" -lt 1 ] || [ "$endpoint_port" -gt 65535 ]; then
+    log_message "Invalid port in ENDPOINT_PORTS: $endpoint_port"
+    exit 1
+  fi
+done
 
 if [ ! -r "$CONFIG_FILE" ]; then
   log_message "WireProxy configuration is not readable: $CONFIG_FILE"
@@ -1554,6 +1573,68 @@ restart_wireproxy() {
   else
     rc-service wireproxy restart >/dev/null 2>&1
   fi
+}
+
+rotate_endpoint_port() {
+  local endpoint
+  local endpoint_host
+  local current_port
+  local first_port=''
+  local next_port=''
+  local previous_was_current=0
+  local candidate
+  local temporary_config
+
+  [ "$ENDPOINT_FAILOVER_ENABLED" = 1 ] || return 1
+
+  endpoint=$(awk -F '=' '
+    /^[[:space:]]*Endpoint[[:space:]]*=/ {
+      value=$2
+      sub(/[;#].*$/, "", value)
+      gsub(/[[:space:]]/, "", value)
+      print value
+      exit
+    }
+  ' "$CONFIG_FILE")
+
+  endpoint_host=${endpoint%:*}
+  current_port=${endpoint##*:}
+  if [ -z "$endpoint_host" ] || ! [[ "$current_port" =~ ^[0-9]+$ ]]; then
+    log_message "Could not rotate an invalid WireProxy Endpoint: $endpoint"
+    return 1
+  fi
+
+  for candidate in $ENDPOINT_PORTS; do
+    [ -n "$first_port" ] || first_port=$candidate
+    if [ "$previous_was_current" = 1 ]; then
+      next_port=$candidate
+      break
+    fi
+    [ "$candidate" = "$current_port" ] && previous_was_current=1
+  done
+
+  [ -n "$next_port" ] || next_port=$first_port
+  [ -n "$next_port" ] && [ "$next_port" != "$current_port" ] || return 1
+
+  temporary_config=$(mktemp "${CONFIG_FILE}.endpoint.XXXXXX") || return 1
+  if awk -v replacement="$endpoint_host:$next_port" '
+    !updated && /^[[:space:]]*Endpoint[[:space:]]*=/ {
+      print "Endpoint = " replacement
+      updated=1
+      next
+    }
+    { print }
+    END { if (!updated) exit 1 }
+  ' "$CONFIG_FILE" > "$temporary_config"; then
+    cat "$temporary_config" > "$CONFIG_FILE"
+    rm -f "$temporary_config"
+    log_message "Rotated WireProxy Endpoint from $endpoint_host:$current_port to $endpoint_host:$next_port"
+    return 0
+  fi
+
+  rm -f "$temporary_config"
+  log_message "Failed to update WireProxy Endpoint in $CONFIG_FILE"
+  return 1
 }
 
 check_warp_stack() {
@@ -1686,6 +1767,7 @@ fi
 
 [ -z "$TRIGGER_STACKS" ] && exit 0
 
+rotate_endpoint_port || true
 log_message "Failure threshold reached for $TRIGGER_STACKS; restarting wireproxy service"
 restart_wireproxy
 reset_all_failures

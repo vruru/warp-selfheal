@@ -36,6 +36,8 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
+2026.08.28 menu.sh v3.2.7-selfheal.5 Add automatic WireProxy Endpoint failover. Once any configured stack reaches the consecutive health-failure threshold, the watchdog rotates through Cloudflare's official WireGuard ports in the order `2408 → 4500 → 500 → 1701 → 2408`, then restarts and verifies the tunnel. This avoids manual configuration edits when an ISP or firewall blocks one UDP port. The feature and port order are configurable in `/etc/default/warp-wireproxy-watchdog`.
+
 2026.08.28 menu.sh v3.2.7-selfheal.4 Fix missed single-stack WireProxy failures. The watchdog now discovers configured IPv4/IPv6 stacks, forces separate Cloudflare trace checks, and tracks consecutive failures independently. Two failures of any configured stack trigger recovery; both `warp=on` and `warp=plus` remain healthy. Adds regression coverage for dual-stack, single-stack, Plus, and alternating failures.
 
 2026.08.28 menu.sh v3.2.7-selfheal.3 Fix the long-running WireProxy orphaned-connection leak at its source. The repository now contains the complete patched v1.1.3 source, regression tests, and three architecture builds. Active half-closed responses remain uninterrupted while silent orphaned connections are reclaimed, with no memory-threshold restart. SOCKS data-plane recovery and lifecycle integration remain included.

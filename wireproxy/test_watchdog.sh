@@ -142,6 +142,17 @@ assert_eq 1 "$(cat "$MOCK_ROOT/state/failures-v4")" 'first IPv4 failure was not 
 run_watchdog
 assert_eq 1 "$(cat "$MOCK_ROOT/restarts")" 'second consecutive IPv4 failure did not restart WireProxy'
 assert_eq 0 "$(cat "$MOCK_ROOT/state/failures-v4")" 'IPv4 failure counter was not reset after recovery'
+assert_contains 'Endpoint = engage.cloudflareclient.com:4500' "$MOCK_ROOT/proxy.conf" 'default Endpoint did not fail over from 2408 to 4500'
+unset MOCK_RECOVER_AFTER_RESTART
+
+setup_case endpoint-rotation '172.16.0.2/32, 2606:4700:110::2/128'
+perl -pi -e 's/:2408/:4500/' "$MOCK_ROOT/proxy.conf"
+printf 'fail\n' > "$MOCK_ROOT/mode-v6"
+export MOCK_RECOVER_AFTER_RESTART=1
+run_watchdog
+run_watchdog
+assert_eq 1 "$(cat "$MOCK_ROOT/restarts")" 'fallback Endpoint failure did not restart WireProxy'
+assert_contains 'Endpoint = engage.cloudflareclient.com:500' "$MOCK_ROOT/proxy.conf" 'fallback Endpoint did not rotate from 4500 to 500'
 unset MOCK_RECOVER_AFTER_RESTART
 
 setup_case alternating-failures '172.16.0.2/32, 2606:4700:110::2/128'

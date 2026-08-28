@@ -36,6 +36,8 @@ wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && ba
 * * *
 
 ## 更新信息
+2026.08.28 menu.sh v3.2.7-selfheal.5 增加 WireProxy Endpoint 自动故障转移：任意已配置栈连续检测失败达到阈值后，按 Cloudflare 官方 WireGuard 端口 `2408 → 4500 → 500 → 1701 → 2408` 轮换 Endpoint，再重启并复测。避免当前运营商或防火墙阻断某个 UDP 端口时只能手动修改配置；可通过 `/etc/default/warp-wireproxy-watchdog` 关闭或自定义端口顺序。
+
 2026.08.28 menu.sh v3.2.7-selfheal.4 修复 WireProxy 单栈故障漏检：watchdog 从配置自动识别 IPv4/IPv6，分别访问 Cloudflare 的 IPv4 与 IPv6 trace 地址并独立累计连续失败次数；任意已配置栈连续失败两次即恢复 WireProxy，`warp=on` 与 `warp=plus` 均视为健康。新增双栈、单栈、Plus 与交替故障回归测试。
 
 2026.08.28 menu.sh v3.2.7-selfheal.3 根治 WireProxy 长期运行的孤儿连接泄漏：仓库内保存完整的 v1.1.3 修复源码、回归测试与三架构构建；活跃的半关闭响应保持不断，静默孤儿连接才会被回收，不再使用内存阈值重启。保留 SOCKS 数据面自动保活及完整生命周期集成。
