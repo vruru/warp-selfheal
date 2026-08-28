@@ -32,8 +32,6 @@ ENDPOINT_CANDIDATES='162.159.192.1:2408 162.159.192.1:4500 162.159.192.1:1701 16
 
 DESIRED_LOC=JP
 FAIL_THRESHOLD=2
-RECOVER_THRESHOLD=2
-PREFER_A=yes
 ROTATE_INTERVAL=3600
 CANDIDATE_FAIL_THRESHOLD=3
 DRAIN_MIN_SECONDS=120
@@ -77,7 +75,7 @@ cancel_account() {
 ensure_account_b() {
   [ -s "$ACCOUNT_B" ] && return 0
   [ -x "$API_SCRIPT" ] || die "registration helper is missing: $API_SCRIPT"
-  log 'registering an independent standby WARP peer'
+  log 'registering an independent WARP peer for slot B'
   register_account "$ACCOUNT_B"
 }
 
@@ -85,7 +83,7 @@ write_b_config() {
   local account=${1:-$ACCOUNT_B}
   local private_key
   private_key=$(account_value private_key "$account")
-  [ -n "$private_key" ] || die 'standby WARP private key is missing'
+  [ -n "$private_key" ] || die 'slot B WARP private key is missing'
   printf '%s\n' "$private_key" > "$PRIVATE_KEY_B"
   chmod 600 "$PRIVATE_KEY_B"
 
@@ -176,7 +174,7 @@ iptables_add_once() {
 
 prepare_b() {
   require_root
-  [ -s "$PRIVATE_KEY_B" ] || die 'standby private key is missing'
+  [ -s "$PRIVATE_KEY_B" ] || die 'slot B private key is missing'
   local endpoint_b
   endpoint_b=$(cat "$ENDPOINT_B_FILE" 2>/dev/null || printf '%s' "$WARP_ENDPOINT")
   cleanup_b || true
@@ -238,12 +236,12 @@ switch_a() {
   delete_selector_rules
   printf 'a\n' > "$ACTIVE_FILE"
   rm -f "$BASE_DIR/switched-to-b-at"
-  log 'new SOCKS connections now use primary A; established B connections are draining'
+  log 'active slot is now A; established B connections are draining'
 }
 
 switch_b() {
   require_root
-  health_b >/dev/null || die 'standby B did not pass the health check'
+  health_b >/dev/null || die 'slot B did not pass the health check'
   delete_selector_rules
   local uid
   uid=$(id -u "$CHECK_USER")
@@ -257,7 +255,7 @@ switch_b() {
     -j DNAT --to-destination "$NS_IP:$BACKEND_B_PORT"
   printf 'b\n' > "$ACTIVE_FILE"
   date +%s > "$BASE_DIR/switched-to-b-at"
-  log 'new SOCKS connections now use standby B; established A connections are draining'
+  log 'active slot is now B; established A connections are draining'
 }
 
 apply_active() {
@@ -418,7 +416,7 @@ refresh_b_once() {
     log "inactive slot B accepted a new qualified WARP IP: $candidate_ip"
     return 0
   fi
-  log 'new B peer failed qualification; restoring the previous standby peer'
+  log 'new B peer failed qualification; restoring the previous slot B peer'
   cancel_account "$ACCOUNT_B"
   cp -f "$previous" "$ACCOUNT_B"
   write_b_config "$ACCOUNT_B"
@@ -501,7 +499,7 @@ refresh_a_once() {
     log "inactive slot A accepted a new qualified WARP IP: $candidate_ip"
     return 0
   fi
-  log 'new A peer failed qualification; restoring the previous primary peer'
+  log 'new A peer failed qualification; restoring the previous slot A peer'
   cancel_account "$candidate"
   cp -f "$previous_config" /etc/wireguard/sockswg.conf
   chmod 600 /etc/wireguard/sockswg.conf
@@ -576,7 +574,7 @@ check() {
   install -d -m 700 "$STATE_DIR"
   exec 9>"$STATE_DIR/lock"
   flock -n 9 || exit 0
-  local active a_ok=0 b_ok=0 b_candidate_ok=0 a_candidate_ok=0 failures recoveries a_ip b_ip
+  local active a_ok=0 b_ok=0 b_candidate_ok=0 a_candidate_ok=0 failures a_ip b_ip
   active=$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)
   health_a >/dev/null && a_ok=1 || true
   health_b >/dev/null && b_ok=1 || true
@@ -610,7 +608,7 @@ check() {
     fi
     failures=$(( $(counter_get a_fail) + 1 ))
     counter_set a_fail "$failures"
-    log "primary A health check failed ($failures/$FAIL_THRESHOLD)"
+    log "active A health check failed ($failures/$FAIL_THRESHOLD)"
     if [ "$failures" -ge "$FAIL_THRESHOLD" ] && [ "$b_ok" = 1 ]; then
       switch_b
       counter_set a_fail 0
@@ -627,7 +625,7 @@ check() {
     if [ "$b_ok" != 1 ]; then
       failures=$(( $(counter_get b_fail) + 1 ))
       counter_set b_fail "$failures"
-      log "standby B health check failed ($failures/$FAIL_THRESHOLD)"
+      log "active B health check failed ($failures/$FAIL_THRESHOLD)"
       if [ "$failures" -ge "$FAIL_THRESHOLD" ] && [ "$a_ok" = 1 ]; then
         switch_a
         counter_set b_fail 0
@@ -635,16 +633,9 @@ check() {
       exit 0
     fi
     counter_set b_fail 0
-    if [ "$PREFER_A" = yes ] && [ "$a_ok" = 1 ]; then
-      recoveries=$(( $(counter_get a_recover) + 1 ))
-      counter_set a_recover "$recoveries"
-      if [ "$recoveries" -ge "$RECOVER_THRESHOLD" ]; then
-        switch_a
-        counter_set a_recover 0
-      fi
-    else
-      counter_set a_recover 0
-    fi
+    # A and B are peers. Keep a healthy active B indefinitely; a recovered A
+    # stays idle and is used only if B later fails.
+    counter_set a_recover 0
   fi
 }
 
@@ -678,7 +669,7 @@ status() {
 write_units() {
   cat > /etc/systemd/system/sockswg-bluegreen-b.service <<'EOF'
 [Unit]
-Description=sockswg blue/green standby WARP tunnel B
+Description=sockswg blue/green WARP tunnel B
 After=network-online.target sockswg.service
 Wants=network-online.target
 
@@ -740,16 +731,14 @@ ensure_settings() {
   [ -s "$SETTINGS_FILE" ] && return 0
   local trace detected_loc
   trace=$(trace_via "127.0.0.1:$FRONT_PORT" runuser -u "$CHECK_USER" -- 2>/dev/null) || \
-    die 'could not detect the primary A location'
+    die 'could not detect the initial slot A location'
   detected_loc=$(awk -F= '$1 == "loc" {print $2; exit}' <<<"$trace")
-  [[ "$detected_loc" =~ ^[A-Z]{2}$ ]] || die 'primary A returned an invalid location code'
+  [[ "$detected_loc" =~ ^[A-Z]{2}$ ]] || die 'initial slot A returned an invalid location code'
   DESIRED_LOC=$detected_loc
   cat > "$SETTINGS_FILE" <<EOF
-# Auto-detected from the existing primary A path during installation.
+# Auto-detected from the existing slot A path during installation.
 DESIRED_LOC=$DESIRED_LOC
 FAIL_THRESHOLD=$FAIL_THRESHOLD
-RECOVER_THRESHOLD=$RECOVER_THRESHOLD
-PREFER_A=$PREFER_A
 ROTATE_INTERVAL=$ROTATE_INTERVAL
 CANDIDATE_FAIL_THRESHOLD=$CANDIDATE_FAIL_THRESHOLD
 DRAIN_MIN_SECONDS=$DRAIN_MIN_SECONDS
@@ -778,10 +767,10 @@ install_all() {
   systemctl enable sockswg-bluegreen-selector.service >/dev/null
   apply_active
   systemctl enable --now sockswg-bluegreen-check.timer >/dev/null
-  show_test b || die 'standby B installation completed but health validation failed'
+  show_test b || die 'slot B installation completed but health validation failed'
   assess_quality a >/dev/null || true
   assess_quality b >/dev/null || true
-  log 'blue/green standby installed; primary A remains active'
+  log 'blue/green peer slots installed; the current active slot remains unchanged'
 }
 
 case "${1:-}" in
