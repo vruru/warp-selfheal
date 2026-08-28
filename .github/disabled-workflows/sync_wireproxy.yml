@@ -1,0 +1,71 @@
+# Disabled workflow archive.
+#
+# GitHub only runs workflow files under .github/workflows. Move this file back
+# there if WireProxy synchronization is needed again.
+name: Synchronize wireproxy
+
+on:
+  workflow_dispatch:
+
+# The sync job commits downloaded archives back to this repository. The old
+# workflow omitted this permission and failed with HTTP 403 when pushing.
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Synchronize wireproxy
+    runs-on: ubuntu-latest
+
+    env:
+      FILE_DIR: wireproxy
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Synchronize wireproxy to the latest version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current=$(head -n 1 "${FILE_DIR}/version_history" | sed -E 's/.*v([^ ]+).*/\1/')
+          current_upstream=${current%%-selfheal.*}
+          latest=$(curl --fail --silent --show-error --location \
+            https://api.github.com/repos/octeep/wireproxy/releases/latest \
+            | jq --raw-output '.tag_name | sub("^v"; "")')
+
+          if [[ -z "${latest}" || "${latest}" == "null" ]]; then
+            echo "Unable to determine the latest WireProxy version" >&2
+            exit 1
+          fi
+
+          if [[ "${latest}" == "${current_upstream}" ]]; then
+            echo "WireProxy ${current} is based on current upstream v${latest}"
+            exit 0
+          fi
+
+          # A patched selfheal build must be rebased and rebuilt from source.
+          # Replacing it with an upstream archive would silently remove fixes.
+          if [[ "${current}" == *-selfheal.* ]]; then
+            echo "Upstream WireProxy v${latest} is available, but ${current} is a patched build."
+            echo "Refusing to replace patched archives with upstream binaries."
+            exit 0
+          fi
+
+          mkdir -p "${FILE_DIR}"
+          for platform in linux_amd64 linux_arm64 linux_s390x; do
+            curl --fail --show-error --location \
+              --output "${FILE_DIR}/wireproxy_${platform}.tar.gz" \
+              "https://github.com/octeep/wireproxy/releases/download/v${latest}/wireproxy_${platform}.tar.gz"
+          done
+
+          sed -i "1i$(date -u '+%Y/%m/%d') v${latest}" "${FILE_DIR}/version_history"
+          echo "VERSION=${latest}" >> "${GITHUB_ENV}"
+          echo "DATE=$(date -u '+%Y/%m/%d %H:%M:%S UTC')" >> "${GITHUB_ENV}"
+
+      - name: Upload to repository
+        if: env.VERSION != ''
+        uses: stefanzweifel/git-auto-commit-action@v7.2.0
+        with:
+          commit_message: Sync wireproxy to V${{ env.VERSION }} by GitHub Actions, ${{ env.DATE }}
