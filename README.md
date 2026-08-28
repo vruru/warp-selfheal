@@ -47,6 +47,8 @@ warp q       # 开关 sockswg
 * * *
 
 ## 更新信息
+2026.08.29 menu.sh v3.2.7-selfheal.9 修复 Debian 12/Dante 与 Soga 的本机对接：Soga 连接 `127.0.0.1` SOCKS 时可能绑定 VPS 公网源地址，旧配置仅允许来源 `127.0.0.1/32`，导致 SOCKS 握手立即被重置。监听仍严格绑定回环地址，不向公网开放，但现在接受本机进程使用任一本地源地址连接。
+
 2026.08.28 menu.sh v3.2.7-selfheal.8 强化批量迁移：临时端口预检也会自动尝试全部官方 Endpoint 端口；正式接管原 SOCKS 端口时保留已验证并完成握手的 WireGuard 网卡，只切换 SOCKS 监听，避免大量 Soga 连接同时重连时与隧道冷启动竞争。
 
 2026.08.28 menu.sh v3.2.7-selfheal.7 增加 Debian 13 兼容后端：若系统源没有 `dante-server`，自动安装 MicroSocks，并用独立的 `sockswg-proxy` 系统用户和 UID 策略路由确保 IPv4/IPv6 出站只进入 `sockswg`，主机默认路由不变。

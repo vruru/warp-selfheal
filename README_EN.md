@@ -47,6 +47,8 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
+2026.08.29 menu.sh v3.2.7-selfheal.9 Fix the Debian 12/Dante integration with Soga. Soga can bind the VPS native address when dialing the loopback SOCKS listener, while the old Dante policy admitted only `127.0.0.1/32` and reset the SOCKS handshake. The listener remains loopback-only and is not exposed publicly, but locally originated connections may now use any local source address.
+
 2026.08.28 menu.sh v3.2.7-selfheal.8 Harden bulk migration. Temporary-port validation now tries every official Endpoint port, and the final SOCKS port cutover keeps the already validated WireGuard handshake warm. Only the SOCKS listener is switched, preventing a reconnect burst from racing a cold tunnel start.
 
 2026.08.28 menu.sh v3.2.7-selfheal.7 Add a Debian 13 compatibility backend. When `dante-server` is unavailable, the installer uses MicroSocks under a dedicated `sockswg-proxy` system user and adds UID policy rules for both IPv4 and IPv6 without changing the host default route.

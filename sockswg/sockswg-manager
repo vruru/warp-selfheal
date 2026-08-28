@@ -132,17 +132,34 @@ timeout.negotiate: 30
 timeout.io: 0
 
 client pass {
-  from: 127.0.0.1/32 to: 0.0.0.0/0
+  # The listener is loopback-only, but Soga can bind its public local address
+  # when dialing 127.0.0.1. Accept every locally-originated source address;
+  # remote hosts still cannot reach this listener.
+  from: 0.0.0.0/0 to: 0.0.0.0/0
 }
 client pass {
-  from: 127.0.0.1/32 to: ::/0
+  from: 0.0.0.0/0 to: ::/0
+}
+client pass {
+  from: ::/0 to: 0.0.0.0/0
+}
+client pass {
+  from: ::/0 to: ::/0
 }
 socks pass {
-  from: 127.0.0.1/32 to: 0.0.0.0/0
+  from: 0.0.0.0/0 to: 0.0.0.0/0
   command: connect bind udpassociate
 }
 socks pass {
-  from: 127.0.0.1/32 to: ::/0
+  from: 0.0.0.0/0 to: ::/0
+  command: connect bind udpassociate
+}
+socks pass {
+  from: ::/0 to: 0.0.0.0/0
+  command: connect bind udpassociate
+}
+socks pass {
+  from: ::/0 to: ::/0
   command: connect bind udpassociate
 }
 EOF
