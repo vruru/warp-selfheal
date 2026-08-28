@@ -20,6 +20,17 @@ die() { printf 'sockswg: %s\n' "$*" >&2; exit 1; }
 info() { printf 'sockswg: %s\n' "$*"; }
 require_root() { [ "$(id -u)" = 0 ] || die 'must be run as root'; }
 
+ensure_backend_marker() {
+  [ -r "$BACKEND_FILE" ] && return 0
+  [ -s "$WG_CONFIG" ] || return 0
+  install -d -m 700 "$CONFIG_DIR"
+  if systemctl cat sockswg.service 2>/dev/null | grep -q '/danted'; then
+    printf 'dante\n' > "$BACKEND_FILE"
+  elif systemctl cat sockswg.service 2>/dev/null | grep -q '/microsocks'; then
+    printf 'microsocks\n' > "$BACKEND_FILE"
+  fi
+}
+
 valid_port() {
   [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1000 ] && [ "$1" -le 65535 ]
 }
@@ -425,6 +436,7 @@ uninstall_stack() {
 }
 
 require_root
+ensure_backend_marker
 case "${1:-}" in
   install) install_stack "${2:-$DEFAULT_PORT}" ;;
   migrate) migrate_wireproxy ;;
