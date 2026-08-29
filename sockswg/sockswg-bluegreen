@@ -130,10 +130,12 @@ EOF
 }
 
 write_a_config() {
-  local account=$1 private_key
+  local account=$1 private_key backend uid
   private_key=$(account_value private_key "$account")
   [ -n "$private_key" ] || die 'candidate A private key is missing'
-  cat > /etc/wireguard/sockswg.conf <<EOF
+  backend=$(proxy_backend) || die 'neither Dante nor MicroSocks is available'
+  {
+    cat <<EOF
 [Interface]
 PrivateKey = $private_key
 Address = 172.16.0.2/32
@@ -141,6 +143,13 @@ MTU = 1420
 Table = 51821
 PostUp = ip -4 rule add priority 10020 from 172.16.0.2/32 lookup 51821
 PostDown = ip -4 rule del priority 10020 from 172.16.0.2/32 lookup 51821
+EOF
+    if [ "$backend" = microsocks ]; then
+      uid=$(id -u sockswg-proxy)
+      printf 'PostUp = ip -4 rule add priority 10021 uidrange %s-%s lookup 51821\n' "$uid" "$uid"
+      printf 'PostDown = ip -4 rule del priority 10021 uidrange %s-%s lookup 51821\n' "$uid" "$uid"
+    fi
+    cat <<EOF
 
 [Peer]
 PublicKey = $WARP_PEER_KEY
@@ -148,7 +157,79 @@ AllowedIPs = 0.0.0.0/0
 Endpoint = $WARP_ENDPOINT
 PersistentKeepalive = 30
 EOF
+  } > /etc/wireguard/sockswg.conf
   chmod 600 /etc/wireguard/sockswg.conf
+}
+
+prefer_host_ipv4() {
+  local file=/etc/gai.conf
+  [ -e "$file" ] || : > "$file"
+  if grep -Eq '^[#[:space:]]*precedence[[:space:]]+::ffff:0:0/96[[:space:]]+100[[:space:]]*$' "$file"; then
+    sed -i -E 's|^[#[:space:]]*precedence[[:space:]]+::ffff:0:0/96[[:space:]]+100[[:space:]]*$|precedence ::ffff:0:0/96  100|' "$file"
+  else
+    printf '\nprecedence ::ffff:0:0/96  100\n' >> "$file"
+  fi
+}
+
+normalize_a_ipv4_only() {
+  require_root
+  install -d -m 700 "$STATE_DIR"
+  exec 9>"$STATE_DIR/lock"
+  flock 9
+  local backend temporary peer priority
+  backend=$(proxy_backend) || die 'neither Dante nor MicroSocks is available'
+  if [ "$backend" = microsocks ]; then
+    [ "$(cat "$ACTIVE_FILE" 2>/dev/null || printf a)" = b ] || \
+      die 'MicroSocks slot A must be inactive before IPv4-only conversion'
+    a_drain_complete || die 'established slot A connections are still draining'
+  fi
+
+  [ -s /etc/wireguard/sockswg.conf ] || die 'slot A WireGuard configuration is missing'
+  [ -e /etc/wireguard/sockswg.conf.before-ipv4-only ] || \
+    cp -p /etc/wireguard/sockswg.conf /etc/wireguard/sockswg.conf.before-ipv4-only
+  temporary=$(mktemp /etc/wireguard/sockswg.conf.ipv4-only.XXXXXX)
+  awk '
+    /^[[:space:]]*Address[[:space:]]*=/ {
+      value=$0
+      sub(/^[^=]*=[[:space:]]*/, "", value)
+      count=split(value, parts, ",")
+      output=""
+      for (i=1; i<=count; i++) {
+        gsub(/[[:space:]]/, "", parts[i])
+        if (parts[i] ~ /\./) output=(output ? output ", " : "") parts[i]
+      }
+      if (output) print "Address = " output
+      next
+    }
+    /^[[:space:]]*Post(Up|Down)[[:space:]]*=.*ip[[:space:]]+-6[[:space:]]+rule/ {next}
+    /^[[:space:]]*AllowedIPs[[:space:]]*=/ {print "AllowedIPs = 0.0.0.0/0"; next}
+    {print}
+  ' /etc/wireguard/sockswg.conf > "$temporary"
+  grep -Eq '^Address[[:space:]]*=.*\.' "$temporary" || die 'converted slot A has no IPv4 address'
+  install -o root -g root -m 600 "$temporary" /etc/wireguard/sockswg.conf
+  rm -f "$temporary"
+
+  if ip link show dev sockswg >/dev/null 2>&1; then
+    peer=$(awk '/^[[:space:]]*PublicKey[[:space:]]*=/ {value=$0; sub(/^[^=]*=[[:space:]]*/, "", value); gsub(/[[:space:]]/, "", value); print value; exit}' /etc/wireguard/sockswg.conf)
+    [ -n "$peer" ] || die 'slot A peer public key is missing'
+    wg set sockswg peer "$peer" allowed-ips 0.0.0.0/0
+    ip -6 address flush dev sockswg scope global >/dev/null 2>&1 || true
+    while priority=$(ip -6 rule show | awk '$0 ~ /lookup 51821/ {gsub(":", "", $1); print $1; exit}'); [ -n "$priority" ]; do
+      ip -6 rule del priority "$priority" >/dev/null 2>&1 || break
+    done
+    ip -6 route flush table 51821 >/dev/null 2>&1 || true
+  fi
+
+  if [ "$backend" = microsocks ]; then
+    sed -i -E '/^ExecStart=.*\/microsocks/ { / -b 172\.16\.0\.2([[:space:]]|$)/! s|$| -b 172.16.0.2|; }' \
+      /etc/systemd/system/sockswg.service
+    systemctl daemon-reload
+    systemctl restart sockswg.service
+  fi
+  rm -f /run/warp-sockswg-watchdog/failures-v6
+  prefer_host_ipv4
+  health_a >/dev/null || die 'slot A failed IPv4 health validation after conversion'
+  log 'slot A converted to IPv4-only; host address selection now prefers native IPv4'
 }
 
 restart_a() {
@@ -845,10 +926,11 @@ case "${1:-}" in
   refresh-b) refresh_b "${2:-3}" ;;
   repair-a) repair_a ;;
   repair-b) repair_b ;;
+  ipv4-only-a) normalize_a_ipv4_only ;;
   assess-a) assess_quality a ;;
   assess-b) assess_quality b ;;
   test-a) show_test a ;;
   test-b) show_test b ;;
   status) status ;;
-  *) die 'usage: sockswg-bluegreen {install|prepare-b|cleanup-b|switch-a|switch-b|apply-active|check|repair-a|repair-b|refresh-a [attempts]|refresh-b [attempts]|assess-a|assess-b|test-a|test-b|status}' ;;
+  *) die 'usage: sockswg-bluegreen {install|prepare-b|cleanup-b|switch-a|switch-b|apply-active|check|repair-a|repair-b|ipv4-only-a|refresh-a [attempts]|refresh-b [attempts]|assess-a|assess-b|test-a|test-b|status}' ;;
 esac

@@ -16,14 +16,14 @@ A fresh WireProxy installation verifies and uses the repository's patched `v1.1.
 
 ### High-performance sockswg split routing
 
-`sockswg` preserves the existing local SOCKS routing model (normally `127.0.0.1:40000`) while moving WARP encryption and packet forwarding into the Linux kernel. Dante provides the loopback-only SOCKS5 listener, and traffic not sent to that listener keeps the VPS native egress.
+`sockswg` preserves the existing local SOCKS routing model (normally `127.0.0.1:40000`) while moving WARP encryption and packet forwarding into the Linux kernel. Dante or MicroSocks provides the loopback-only SOCKS5 listener. Both A/B WARP slots are strictly IPv4-only: no WARP IPv6 address, `::/0`, or IPv6 policy rule is installed, and traffic not sent to the listener always keeps the VPS native egress. Pure IPv6 destinations are intentionally unsupported.
 
 ```bash
 warp p       # install, or safely migrate the current WireProxy instance
 warp q       # toggle sockswg
 ```
 
-Migration validates both WARP IPv4 and IPv6 on a temporary port before taking over the original SOCKS port. Any failure restores WireProxy automatically. The independent watchdog checks both stacks every 30 seconds, reconstructs an inactive service/interface immediately, and rotates through the official UDP Endpoint ports after two consecutive data-plane failures. Installation supports Debian/Ubuntu systemd hosts; Debian 12 prefers Dante, while Debian 13 automatically uses MicroSocks with dedicated-UID policy routing when Dante is unavailable.
+Migration validates WARP IPv4 on a temporary port before taking over the original SOCKS port. Any failure restores WireProxy automatically. The independent watchdog checks IPv4 every 30 seconds, reconstructs an inactive service/interface immediately, and rotates through the official UDP Endpoint ports after two consecutive data-plane failures. Installation supports Debian/Ubuntu systemd hosts; Debian 12 prefers Dante, while Debian 13 automatically uses MicroSocks bound to the WARP IPv4 address with dedicated-UID policy routing when Dante is unavailable.
 
 #### sockswg IPv4 blue/green disaster recovery (Debian 12/Dante and Debian 13/MicroSocks)
 
@@ -63,6 +63,8 @@ This repository retains the complete upstream history and the runtime files used
 * * *
 
 ## Update Information
+2026.08.29 menu.sh v3.2.7-selfheal.10 Make `sockswg` strictly IPv4-only. New installations no longer write a WARP IPv6 address, `::/0`, or IPv6 policy rules, and the watchdog checks only IPv4. Debian 13/MicroSocks binds explicitly to the WARP IPv4 address so pure IPv6 requests cannot leak to the VPS native route. Non-SOCKS host traffic never enters WARP.
+
 2026.08.29 sockswg-bluegreen pilot: add equal IPv4-only A/B WARP disaster-recovery slots on one VPS. The active slot changes only after consecutive health failures and never automatically fails back; whichever slot is healthy remains active. The idle tunnel runs in an isolated network namespace; switching affects only new connections while established connections drain. Qualification checks region, WARP status, and Google non-`429` responses. A healthy but non-`optimal` inactive slot runs at most one IP-selection round per hour, cycling Endpoints first and using new peer registration only as a fallback. Slot B automatically supports Debian 12/Dante and Debian 13/MicroSocks and is not installed by `warp p` by default.
 
 2026.08.29 menu.sh v3.2.7-selfheal.9 Fix the Debian 12/Dante integration with Soga. Soga can bind the VPS native address when dialing the loopback SOCKS listener, while the old Dante policy admitted only `127.0.0.1/32` and reset the SOCKS handshake. The listener remains loopback-only and is not exposed publicly, but locally originated connections may now use any local source address.

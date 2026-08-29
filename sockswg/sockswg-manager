@@ -20,6 +20,16 @@ die() { printf 'sockswg: %s\n' "$*" >&2; exit 1; }
 info() { printf 'sockswg: %s\n' "$*"; }
 require_root() { [ "$(id -u)" = 0 ] || die 'must be run as root'; }
 
+prefer_host_ipv4() {
+  local file=/etc/gai.conf
+  [ -e "$file" ] || : > "$file"
+  if grep -Eq '^[#[:space:]]*precedence[[:space:]]+::ffff:0:0/96[[:space:]]+100[[:space:]]*$' "$file"; then
+    sed -i -E 's|^[#[:space:]]*precedence[[:space:]]+::ffff:0:0/96[[:space:]]+100[[:space:]]*$|precedence ::ffff:0:0/96  100|' "$file"
+  else
+    printf '\nprecedence ::ffff:0:0/96  100\n' >> "$file"
+  fi
+}
+
 ensure_backend_marker() {
   [ -r "$BACKEND_FILE" ] && return 0
   [ -s "$WG_CONFIG" ] || return 0
@@ -78,43 +88,33 @@ proxy_value() {
 }
 
 write_configs() {
-  local port=$1 addresses private_key mtu public_key endpoint address4 address6
+  local port=$1 addresses private_key mtu public_key endpoint address4
   addresses=$(proxy_value Address)
   private_key=$(proxy_value PrivateKey)
   mtu=$(proxy_value MTU)
   public_key=$(proxy_value PublicKey)
   endpoint=$(proxy_value Endpoint)
   address4=$(tr ',' '\n' <<< "$addresses" | awk '/\./ {gsub(/[[:space:]]/,""); print; exit}')
-  address6=$(tr ',' '\n' <<< "$addresses" | awk '/:/ {gsub(/[[:space:]]/,""); print; exit}')
 
   [ -n "$private_key" ] || die "PrivateKey missing from $SOURCE_CONFIG"
   [ -n "$public_key" ] || die "PublicKey missing from $SOURCE_CONFIG"
   [ -n "$endpoint" ] || die "Endpoint missing from $SOURCE_CONFIG"
-  [ -n "$address4$address6" ] || die "Address missing from $SOURCE_CONFIG"
+  [ -n "$address4" ] || die "an IPv4 WARP address is required in $SOURCE_CONFIG"
   mtu=${mtu:-1280}
 
   install -d -m 700 /etc/wireguard "$CONFIG_DIR"
   {
     printf '[Interface]\nPrivateKey = %s\n' "$private_key"
-    [ -n "$address4" ] && printf 'Address = %s\n' "$address4"
-    [ -n "$address6" ] && printf 'Address = %s\n' "$address6"
+    printf 'Address = %s\n' "$address4"
     printf 'MTU = %s\nTable = %s\n' "$mtu" "$TABLE_ID"
-    [ -n "$address4" ] && {
-      printf 'PostUp = ip -4 rule add priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address4" "$TABLE_ID"
-      printf 'PostDown = ip -4 rule del priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address4" "$TABLE_ID"
-    }
-    [ -n "$address6" ] && {
-      printf 'PostUp = ip -6 rule add priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address6" "$TABLE_ID"
-      printf 'PostDown = ip -6 rule del priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address6" "$TABLE_ID"
-    }
+    printf 'PostUp = ip -4 rule add priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address4" "$TABLE_ID"
+    printf 'PostDown = ip -4 rule del priority %s from %s lookup %s\n' "$RULE_PRIORITY" "$address4" "$TABLE_ID"
     if [ "${SOCKS_BACKEND:-}" = microsocks ]; then
       printf 'PostUp = ip -4 rule add priority %s uidrange %s-%s lookup %s\n' "$((RULE_PRIORITY + 1))" "$SOCKS_BACKEND_UID" "$SOCKS_BACKEND_UID" "$TABLE_ID"
       printf 'PostDown = ip -4 rule del priority %s uidrange %s-%s lookup %s\n' "$((RULE_PRIORITY + 1))" "$SOCKS_BACKEND_UID" "$SOCKS_BACKEND_UID" "$TABLE_ID"
-      printf 'PostUp = ip -6 rule add priority %s uidrange %s-%s lookup %s\n' "$((RULE_PRIORITY + 1))" "$SOCKS_BACKEND_UID" "$SOCKS_BACKEND_UID" "$TABLE_ID"
-      printf 'PostDown = ip -6 rule del priority %s uidrange %s-%s lookup %s\n' "$((RULE_PRIORITY + 1))" "$SOCKS_BACKEND_UID" "$SOCKS_BACKEND_UID" "$TABLE_ID"
     fi
     printf '\n[Peer]\nPublicKey = %s\n' "$public_key"
-    printf 'AllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = %s\nPersistentKeepalive = 30\n' "$endpoint"
+    printf 'AllowedIPs = 0.0.0.0/0\nEndpoint = %s\nPersistentKeepalive = 30\n' "$endpoint"
   } > "$WG_CONFIG"
   chmod 600 "$WG_CONFIG"
 
@@ -137,29 +137,8 @@ client pass {
   # remote hosts still cannot reach this listener.
   from: 0.0.0.0/0 to: 0.0.0.0/0
 }
-client pass {
-  from: 0.0.0.0/0 to: ::/0
-}
-client pass {
-  from: ::/0 to: 0.0.0.0/0
-}
-client pass {
-  from: ::/0 to: ::/0
-}
 socks pass {
   from: 0.0.0.0/0 to: 0.0.0.0/0
-  command: connect bind udpassociate
-}
-socks pass {
-  from: 0.0.0.0/0 to: ::/0
-  command: connect bind udpassociate
-}
-socks pass {
-  from: ::/0 to: 0.0.0.0/0
-  command: connect bind udpassociate
-}
-socks pass {
-  from: ::/0 to: ::/0
   command: connect bind udpassociate
 }
 EOF
@@ -174,12 +153,14 @@ EOF
 
 write_units() {
   local watchdog_source="$SCRIPT_DIR/sockswg-watchdog"
-  local port
+  local port bind4
   if [ "$(readlink -f "$0")" != /usr/local/sbin/sockswg-manager ]; then
     install -m 755 "$0" /usr/local/sbin/sockswg-manager
   fi
   SOCKS_BACKEND=${SOCKS_BACKEND:-$(cat "$BACKEND_FILE" 2>/dev/null)}
   port=$(awk '/^internal:/{print $NF; exit}' "$SOCKS_CONFIG")
+  bind4=$(awk -F '=' '/^[[:space:]]*Address[[:space:]]*=.*\./ {value=$2; gsub(/[[:space:]]/, "", value); sub(/\/.*/, "", value); print value; exit}' "$WG_CONFIG")
+  [ -n "$bind4" ] || die 'could not determine the sockswg IPv4 bind address'
   if [ "$SOCKS_BACKEND" = dante ]; then
     cat > /etc/systemd/system/sockswg.service <<'EOF'
 [Unit]
@@ -211,7 +192,7 @@ After=network-online.target wg-quick@sockswg.service
 [Service]
 Type=simple
 User=sockswg-proxy
-ExecStart=/usr/bin/microsocks -q -i 127.0.0.1 -p $port
+ExecStart=/usr/bin/microsocks -q -i 127.0.0.1 -p $port -b $bind4
 Restart=always
 RestartSec=3s
 LimitNOFILE=1048576
@@ -276,16 +257,12 @@ resume_watchdog() {
 }
 
 health_check() {
-  local port=$1 output4 output6
+  local port=$1 output4
   output4=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
     --socks5-hostname "127.0.0.1:$port" https://1.1.1.1/cdn-cgi/trace) || return 1
-  output6=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
-    --socks5-hostname "127.0.0.1:$port" 'https://[2606:4700:4700::1111]/cdn-cgi/trace') || return 1
   grep -Eq '^warp=(on|plus)$' <<< "$output4" || return 1
-  grep -Eq '^warp=(on|plus)$' <<< "$output6" || return 1
-  printf 'IPv4 %s, IPv6 %s\n' \
-    "$(awk -F= '/^(ip|warp)=/{printf "%s%s",sep,$2;sep="/"}' <<< "$output4")" \
-    "$(awk -F= '/^(ip|warp)=/{printf "%s%s",sep,$2;sep="/"}' <<< "$output6")"
+  printf 'IPv4 %s\n' \
+    "$(awk -F= '/^(ip|warp)=/{printf "%s%s",sep,$2;sep="/"}' <<< "$output4")"
 }
 
 health_check_retry() {
@@ -347,6 +324,7 @@ install_stack() {
   valid_port "$port" || die "invalid SOCKS port: $port"
   [ -s "$SOURCE_CONFIG" ] || die "$SOURCE_CONFIG is required; install WireProxy once to create the WARP account first"
   install_dependencies
+  prefer_host_ipv4
   pause_watchdog
   stop_stack
   write_configs "$port"
@@ -357,7 +335,7 @@ install_stack() {
     info "healthy on 127.0.0.1:$port"
   else
     stop_stack
-    die 'IPv4/IPv6 WARP health check failed; sockswg was stopped'
+    die 'IPv4 WARP health check failed; sockswg was stopped'
   fi
 }
 

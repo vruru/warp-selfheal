@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # 当前脚本版本号
-# Modified 2026-08-29: accept Soga connections that bind a native local source address.
-VERSION='3.2.7-selfheal.9'
+# Modified 2026-08-29: make sockswg strictly IPv4-only so host traffic never leaks into WARP IPv6.
+VERSION='3.2.7-selfheal.10'
 
 # 派生版自更新地址。
 SELFHEAL_RAW_URL='https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh'

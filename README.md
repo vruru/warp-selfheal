@@ -16,14 +16,14 @@ wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && ba
 
 ### sockswg 高性能 SOCKS 分流
 
-`sockswg` 保持应用原有的 `127.0.0.1:40000` SOCKS 分流方式，但把隧道数据面换成 Linux 内核 WireGuard，并由 Dante 提供仅监听本机的 SOCKS5。没有经过 SOCKS 的流量仍走 VPS 原生出口。相比单进程用户态 WireProxy，WireGuard 的加解密和转发在内核完成，适合多核、高连接数场景。
+`sockswg` 保持应用原有的 `127.0.0.1:40000` SOCKS 分流方式，但把隧道数据面换成 Linux 内核 WireGuard，并由 Dante 或 MicroSocks 提供仅监听本机的 SOCKS5。A/B WARP 均严格为 IPv4-only，不配置 WARP IPv6 地址、`::/0` 或 IPv6 策略规则；没有经过 SOCKS 的流量始终走 VPS 原生出口。纯 IPv6 目的地不受支持。相比单进程用户态 WireProxy，WireGuard 的加解密和转发在内核完成，适合多核、高连接数场景。
 
 ```bash
 warp p       # 全新安装，或把当前 WireProxy 安全迁移为 sockswg
 warp q       # 开关 sockswg
 ```
 
-迁移时先在空闲临时端口并行验证 WARP IPv4 和 IPv6，成功后才接管原 SOCKS 端口；失败会自动恢复 WireProxy。旧 WireProxy 二进制和配置会禁用并保留作回滚，不会继续占用端口。`sockswg` watchdog 每 30 秒分别检测两栈，服务/网卡消失会立即重建，连续两次数据面失败会依次轮换 `2408 → 4500 → 500 → 1701` UDP Endpoint 并复测。当前安装支持使用 systemd 的 Debian/Ubuntu；Debian 12 优先使用 Dante，Debian 13 在官方源没有 Dante 时自动改用 MicroSocks 和专用 UID 策略路由。
+迁移时先在空闲临时端口验证 WARP IPv4，成功后才接管原 SOCKS 端口；失败会自动恢复 WireProxy。旧 WireProxy 二进制和配置会禁用并保留作回滚，不会继续占用端口。`sockswg` watchdog 每 30 秒检测 IPv4，服务/网卡消失会立即重建，连续两次数据面失败会依次轮换 `2408 → 4500 → 500 → 1701` UDP Endpoint 并复测。当前安装支持使用 systemd 的 Debian/Ubuntu；Debian 12 优先使用 Dante，Debian 13 在官方源没有 Dante 时自动改用 MicroSocks，强制绑定 WARP IPv4 并使用专用 UID 策略路由。
 
 #### sockswg IPv4 蓝绿灾备（Debian 12/Dante 与 Debian 13/MicroSocks）
 
@@ -63,6 +63,8 @@ sockswg-bluegreen status
 * * *
 
 ## 更新信息
+2026.08.29 menu.sh v3.2.7-selfheal.10 将 `sockswg` 统一为严格 IPv4-only：新装不再写入 WARP IPv6 地址、`::/0` 或 IPv6 策略规则，watchdog 只检测 IPv4；Debian 13/MicroSocks 强制绑定 WARP IPv4，防止纯 IPv6 请求回落到 VPS 原生出口。非 SOCKS 本机流量不会进入 WARP。
+
 2026.08.29 sockswg-bluegreen 试运行版：在同一 VPS 上增加 IPv4-only A/B WARP 对等灾备。当前活动槽只在连续健康失败时切换；切换后不自动回切，正常槽会持续使用。空闲槽位于独立网络命名空间，切换只影响新连接，旧连接自然排空。健康判断同时验证地区、WARP 状态和 Google 非 `429`；健康但非 `optimal` 的空闲槽每小时最多筛选一次 IP，先轮换 Endpoint，新 Peer 注册仅作为兜底。B 槽自动适配 Debian 12/Dante 与 Debian 13/MicroSocks，暂不随 `warp p` 默认安装。
 
 2026.08.29 menu.sh v3.2.7-selfheal.9 修复 Debian 12/Dante 与 Soga 的本机对接：Soga 连接 `127.0.0.1` SOCKS 时可能绑定 VPS 公网源地址，旧配置仅允许来源 `127.0.0.1/32`，导致 SOCKS 握手立即被重置。监听仍严格绑定回环地址，不向公网开放，但现在接受本机进程使用任一本地源地址连接。
