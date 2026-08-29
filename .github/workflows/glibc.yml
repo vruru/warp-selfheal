@@ -3,6 +3,9 @@ name: Build glibc & make
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   Building:
     name: Build on CentOS 7

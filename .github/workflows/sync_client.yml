@@ -2,8 +2,9 @@ name: Synchronize client
 
 on:
   workflow_dispatch:
-#  schedule:
-#    - cron: '18 2 * * *'
+
+permissions:
+  contents: write
 
 jobs:
   WireGuard-go:

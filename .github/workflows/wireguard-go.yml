@@ -3,6 +3,9 @@ name: Cross compile WireGuard-go
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   WireGuard-go:
 

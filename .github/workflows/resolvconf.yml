@@ -3,6 +3,9 @@ name: "Build resolvconf"
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   Building:
     name: "Build on Ubuntu"
