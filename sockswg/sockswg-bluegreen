@@ -259,6 +259,7 @@ a_connection_count() {
 a_drain_complete() {
   local count switched now
   count=$(a_connection_count)
+  [ "$count" -eq 0 ] && return 0
   switched=$(cat "$BASE_DIR/switched-to-b-at" 2>/dev/null || printf 0)
   now=$(date +%s)
   [ "$count" -le "$DRAIN_CONNECTION_THRESHOLD" ] && \
@@ -273,6 +274,7 @@ b_connection_count() {
 b_drain_complete() {
   local count switched now
   count=$(b_connection_count)
+  [ "$count" -eq 0 ] && return 0
   switched=$(cat "$BASE_DIR/switched-to-a-at" 2>/dev/null || printf 0)
   now=$(date +%s)
   [ "$count" -le "$DRAIN_CONNECTION_THRESHOLD" ] && \
