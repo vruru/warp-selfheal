@@ -36,6 +36,9 @@ ROTATE_INTERVAL=3600
 CANDIDATE_FAIL_THRESHOLD=3
 DRAIN_MIN_SECONDS=120
 DRAIN_CONNECTION_THRESHOLD=20
+GEMINI_CHECK_INTERVAL=3600
+GEMINI_TIMEOUT=30
+GEMINI_URL='https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate'
 [ -r "$SETTINGS_FILE" ] && . "$SETTINGS_FILE"
 
 proxy_backend() {
@@ -428,6 +431,126 @@ google_target_via() {
   fi
 }
 
+classify_gemini_response() {
+  local body=$1 http_code=$2 error_code
+  if ! [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+    printf 'http-%s\n' "${http_code:-unknown}"
+    return 1
+  fi
+  if grep -q 'BardErrorInfo' "$body"; then
+    error_code=$(grep -oE 'BardErrorInfo[^]]*\[([0-9]+)' "$body" 2>/dev/null |
+      head -n1 | grep -oE '[0-9]+$' || true)
+    printf 'bard-error-%s\n' "${error_code:-unknown}"
+    return 1
+  fi
+  if grep -Eq 'rc_[0-9a-fA-F]{8,}' "$body"; then
+    printf 'ok\n'
+    return 0
+  fi
+  if grep -Eqi '/sorry/|too many requests|(^|[^[:alnum:]])429([^[:alnum:]]|$)' "$body"; then
+    printf 'google-blocked\n'
+    return 1
+  fi
+  printf 'invalid-response\n'
+  return 1
+}
+
+gemini_probe_via() {
+  local proxy=$1
+  shift
+  local body http_code result probe_ok=0
+  local -a runner=("$@")
+  body=$("${runner[@]}" mktemp) || {
+    printf 'temporary-file-error\n'
+    return 1
+  }
+  if http_code=$("${runner[@]}" curl -4ksS --compressed \
+      -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/139.0.0.0 Safari/537.36' \
+      --max-time "$GEMINI_TIMEOUT" --connect-timeout 10 \
+      --socks5-hostname "$proxy" -o "$body" -w '%{http_code}' \
+      -X POST -H 'content-type: application/x-www-form-urlencoded;charset=UTF-8' \
+      --data 'f.req=[]' "$GEMINI_URL" 2>/dev/null); then
+    if result=$(classify_gemini_response "$body" "$http_code"); then
+      probe_ok=1
+    fi
+  else
+    result=transport-error
+  fi
+  rm -f "$body"
+  printf '%s\n' "${result:-transport-error}"
+  [ "$probe_ok" = 1 ]
+}
+
+gemini_cache_value() {
+  local slot=$1 key=$2
+  awk -F= -v key="$key" '$1 == key {print $2; exit}' \
+    "$STATE_DIR/gemini-$slot" 2>/dev/null
+}
+
+write_gemini_cache() {
+  local slot=$1 ip=$2 result=$3 temporary quality_temporary
+  install -d -m 700 "$STATE_DIR"
+  temporary=$(mktemp "$STATE_DIR/gemini-$slot.XXXXXX")
+  cat > "$temporary" <<EOF
+checked_at=$(date +%s)
+ip=$ip
+result=$result
+EOF
+  mv -f "$temporary" "$STATE_DIR/gemini-$slot"
+  if [ "$result" != ok ]; then
+    quality_temporary=$(mktemp "$BASE_DIR/quality-$slot.XXXXXX")
+    cat > "$quality_temporary" <<EOF
+tier=unusable
+warp_loc=$DESIRED_LOC
+google_region=unknown
+google_target=gemini.google.com
+gemini=$result
+checked_at=$(date +%s)
+EOF
+    mv -f "$quality_temporary" "$BASE_DIR/quality-$slot"
+  fi
+}
+
+gemini_probe_slot() {
+  local slot=$1 proxy ip result probe_ok=0
+  local -a runner=()
+  if [ "$slot" = a ]; then
+    proxy="127.0.0.1:$FRONT_PORT"
+    runner=(runuser -u "$CHECK_USER" --)
+    ip=$(public_ip_a || true)
+  else
+    proxy="$NS_IP:$BACKEND_B_PORT"
+    ip=$(public_ip_b || true)
+  fi
+  [ -n "$ip" ] || return 1
+  if result=$(gemini_probe_via "$proxy" "${runner[@]}"); then
+    probe_ok=1
+  fi
+  write_gemini_cache "$slot" "$ip" "$result"
+  [ "$probe_ok" = 1 ]
+}
+
+gemini_health_slot() {
+  local slot=$1 ip cached_ip checked_at result now
+  if [ "$slot" = a ]; then
+    ip=$(public_ip_a || true)
+  else
+    ip=$(public_ip_b || true)
+  fi
+  [ -n "$ip" ] || return 1
+  cached_ip=$(gemini_cache_value "$slot" ip || true)
+  checked_at=$(gemini_cache_value "$slot" checked_at || true)
+  result=$(gemini_cache_value "$slot" result || true)
+  now=$(date +%s)
+  if [ "$cached_ip" != "$ip" ] || ! [[ "$checked_at" =~ ^[0-9]+$ ]] ||
+      [ $((now - ${checked_at:-0})) -ge "$GEMINI_CHECK_INTERVAL" ]; then
+    gemini_probe_slot "$slot" || return 1
+    result=$(gemini_cache_value "$slot" result)
+  fi
+  [ "$result" = ok ] || return 1
+  printf 'gemini=ok\n'
+}
+
 assess_quality() {
   local slot=$1 proxy region target tier
   local -a runner=()
@@ -447,6 +570,7 @@ tier=$tier
 warp_loc=$DESIRED_LOC
 google_region=${region:-unknown}
 google_target=${target:-unknown}
+gemini=ok
 checked_at=$(date +%s)
 EOF
   printf '%s\n' "$tier"
@@ -468,12 +592,18 @@ health_result() {
 }
 
 health_a() {
-  health_result "127.0.0.1:$FRONT_PORT" runuser -u "$CHECK_USER" --
+  local transport gemini
+  transport=$(health_result "127.0.0.1:$FRONT_PORT" runuser -u "$CHECK_USER" --) || return 1
+  gemini=$(gemini_health_slot a) || return 1
+  printf '%s %s\n' "$transport" "$gemini"
 }
 
 health_b() {
+  local transport gemini
   systemctl is-active --quiet sockswg-bluegreen-b.service || return 1
-  health_result "$NS_IP:$BACKEND_B_PORT"
+  transport=$(health_result "$NS_IP:$BACKEND_B_PORT") || return 1
+  gemini=$(gemini_health_slot b) || return 1
+  printf '%s %s\n' "$transport" "$gemini"
 }
 
 public_ip_a() {
@@ -711,9 +841,12 @@ check() {
     if [ "$b_candidate_ok" = 1 ]; then
       counter_set b_candidate_fail 0
     else
-      failures=$(( $(counter_get b_candidate_fail) + 1 ))
-      counter_set b_candidate_fail "$failures"
-      log "inactive B candidate failed qualification ($failures/$CANDIDATE_FAIL_THRESHOLD)"
+      failures=$(counter_get b_candidate_fail)
+      if [ "$failures" -lt "$CANDIDATE_FAIL_THRESHOLD" ]; then
+        failures=$((failures + 1))
+        counter_set b_candidate_fail "$failures"
+        log "inactive B candidate failed qualification ($failures/$CANDIDATE_FAIL_THRESHOLD)"
+      fi
       if [ "$failures" -ge "$CANDIDATE_FAIL_THRESHOLD" ] && rotation_due b; then
         mark_rotation b
         if repair_b; then
@@ -734,9 +867,12 @@ check() {
       fi
       exit 0
     fi
-    failures=$(( $(counter_get a_fail) + 1 ))
-    counter_set a_fail "$failures"
-    log "active A health check failed ($failures/$FAIL_THRESHOLD)"
+    failures=$(counter_get a_fail)
+    if [ "$failures" -lt "$FAIL_THRESHOLD" ]; then
+      failures=$((failures + 1))
+      counter_set a_fail "$failures"
+      log "active A health check failed ($failures/$FAIL_THRESHOLD)"
+    fi
     if [ "$failures" -ge "$FAIL_THRESHOLD" ] && [ "$b_ok" = 1 ]; then
       switch_b
       counter_set a_fail 0
@@ -751,9 +887,12 @@ check() {
       fi
     fi
     if [ "$b_ok" != 1 ]; then
-      failures=$(( $(counter_get b_fail) + 1 ))
-      counter_set b_fail "$failures"
-      log "active B health check failed ($failures/$FAIL_THRESHOLD)"
+      failures=$(counter_get b_fail)
+      if [ "$failures" -lt "$FAIL_THRESHOLD" ]; then
+        failures=$((failures + 1))
+        counter_set b_fail "$failures"
+        log "active B health check failed ($failures/$FAIL_THRESHOLD)"
+      fi
       if [ "$failures" -ge "$FAIL_THRESHOLD" ] && [ "$a_ok" = 1 ]; then
         switch_a
         counter_set b_fail 0
@@ -797,6 +936,8 @@ status() {
   printf 'a_ip=%s b_ip=%s diverse=%s\n' "${a_ip:-unavailable}" "${b_ip:-unavailable}" "$diverse"
   [ -s "$BASE_DIR/quality-a" ] && printf 'A_quality %s\n' "$(tr '\n' ' ' < "$BASE_DIR/quality-a")"
   [ -s "$BASE_DIR/quality-b" ] && printf 'B_quality %s\n' "$(tr '\n' ' ' < "$BASE_DIR/quality-b")"
+  [ -s "$STATE_DIR/gemini-a" ] && printf 'A_gemini %s\n' "$(tr '\n' ' ' < "$STATE_DIR/gemini-a")"
+  [ -s "$STATE_DIR/gemini-b" ] && printf 'B_gemini %s\n' "$(tr '\n' ' ' < "$STATE_DIR/gemini-b")"
   show_test a || true
   show_test b || true
 }
@@ -886,6 +1027,8 @@ ROTATE_INTERVAL=$ROTATE_INTERVAL
 CANDIDATE_FAIL_THRESHOLD=$CANDIDATE_FAIL_THRESHOLD
 DRAIN_MIN_SECONDS=$DRAIN_MIN_SECONDS
 DRAIN_CONNECTION_THRESHOLD=$DRAIN_CONNECTION_THRESHOLD
+GEMINI_CHECK_INTERVAL=$GEMINI_CHECK_INTERVAL
+GEMINI_TIMEOUT=$GEMINI_TIMEOUT
 EOF
   chmod 644 "$SETTINGS_FILE"
   log "using auto-detected desired WARP location: $DESIRED_LOC"

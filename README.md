@@ -27,9 +27,9 @@ warp q       # 开关 sockswg
 
 #### sockswg IPv4 蓝绿灾备（Debian 12/Dante 与 Debian 13/MicroSocks）
 
-`sockswg-bluegreen` 在同一台 VPS 上运行地位平等的 A/B 两条隧道，其中纯 IPv4 的 B 位于独立网络命名空间。安装时从初始 A 自动识别并保存期望地区。iptables 连接跟踪只把新 SOCKS 连接切到另一槽，已经建立的 TCP 连接继续沿原隧道传输并自然排空。每 20 秒同时检查 Cloudflare 地区、`warp=on/plus` 和 Google HTTP 状态；当前活动槽连续失败两次才切换。切换后，只要新活动槽正常就一直使用，修复后的旧槽仅作为空闲灾备，不自动回切。
+`sockswg-bluegreen` 在同一台 VPS 上运行地位平等的 A/B 两条隧道，其中纯 IPv4 的 B 位于独立网络命名空间。安装时从初始 A 自动识别并保存期望地区。iptables 连接跟踪只把新 SOCKS 连接切到另一槽，已经建立的 TCP 连接继续沿原隧道传输并自然排空。每 20 秒同时检查 Cloudflare 地区、`warp=on/plus`、Google HTTP 和缓存的 Gemini 生成接口状态；当前活动槽连续失败两次且另一槽合格才切换。切换后，只要新活动槽正常就一直使用，修复后的旧槽仅作为空闲灾备，不自动回切。
 
-空闲槽不健康时会自动修复；健康但不是 `optimal` 时，每小时最多启动一轮 IP 筛选，并且会先等待该槽的旧连接排空。筛选先轮换 Endpoint 并重连同一个 Peer，连续验收地区、Google 非 `429` 以及与活动槽的出口差异；多次失败后才注销并注册候选 Peer，失败候选会注销并回滚。候选另外记录 Google/YouTube 地区：与该机 WARP 地区一致为 `optimal`，Google 可访问但地区不同（包括 `.com.hk`）为 `usable`，两级都可用于灾备。A/B IP 相同本身不会触发筛选。WARP 出口由 Cloudflare 分配，蓝绿机制提高可用性但不能保证永久固定或无限生成不同公网 IP。
+空闲槽不健康时会自动修复；健康但不是 `optimal` 时，每小时最多启动一轮 IP 筛选，并且会先等待该槽的旧连接排空。筛选先轮换 Endpoint 并重连同一个 Peer，连续验收地区、Google 非 `429`、Gemini 可以真正生成响应，以及与活动槽的出口差异；多次失败后才注销并注册候选 Peer，失败候选会注销并回滚。Gemini 检测按“槽位 + 当前公网 IP”缓存一小时，换到新 IP 会立即重验；`BardErrorInfo 1060`、`429`、Google 拦截页、超时或异常响应都判为不可用。A/B 同时不合格时不会来回切换或打断现有连接，只修复已经排空的空闲槽。候选另外记录 Google/YouTube 地区：与该机 WARP 地区一致为 `optimal`，Google 可访问但地区不同（包括 `.com.hk`）为 `usable`，但必须先通过 Gemini 生成检测。A/B IP 相同本身不会触发筛选。WARP 出口由 Cloudflare 分配，蓝绿机制提高可用性但不能保证永久固定或无限生成不同公网 IP。
 
 当前支持已有 `sockswg` 的 Debian 12/Dante 和 Debian 13/MicroSocks；脚本根据现有 `sockswg.service` 自动选择 B 槽后端。MicroSocks B 槽在独立网络命名空间内以非特权用户运行。该功能尚未默认集成到 `warp p`。
 
@@ -63,6 +63,8 @@ sockswg-bluegreen status
 * * *
 
 ## 更新信息
+2026.08.30 sockswg-bluegreen Gemini 可用性修复：健康检查不再只看 Google 首页，而会低频调用 Gemini 生成接口验证出口是否真正可对话；`BardErrorInfo 1060`、`429`、拦截页、超时及异常响应均拒绝。结果按槽位和公网 IP 缓存一小时，新 IP 立即重验；仅在另一槽合格时切换新连接，两槽同时不合格则保持当前线路并只修复排空的空闲槽，避免用户连接反复中断。
+
 2026.08.29 menu.sh v3.2.7-selfheal.10 将 `sockswg` 统一为严格 IPv4-only：新装不再写入 WARP IPv6 地址、`::/0` 或 IPv6 策略规则，watchdog 只检测 IPv4；Debian 13/MicroSocks 强制绑定 WARP IPv4，防止纯 IPv6 请求回落到 VPS 原生出口。非 SOCKS 本机流量不会进入 WARP。
 
 2026.08.29 sockswg-bluegreen 试运行版：在同一 VPS 上增加 IPv4-only A/B WARP 对等灾备。当前活动槽只在连续健康失败时切换；切换后不自动回切，正常槽会持续使用。空闲槽位于独立网络命名空间，切换只影响新连接，旧连接自然排空。健康判断同时验证地区、WARP 状态和 Google 非 `429`；健康但非 `optimal` 的空闲槽每小时最多筛选一次 IP，先轮换 Endpoint，新 Peer 注册仅作为兜底。B 槽自动适配 Debian 12/Dante 与 Debian 13/MicroSocks，暂不随 `warp p` 默认安装。

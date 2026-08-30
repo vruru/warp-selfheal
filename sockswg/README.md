@@ -31,3 +31,17 @@ and is not vendored in this repository. On Debian 13, where Dante is absent
 from the official repository, MicroSocks runs as a dedicated system user and
 an IPv4 bind address plus a UID policy rule prevent proxy traffic from leaking
 to the host route. Pure IPv6 destinations are intentionally unsupported.
+
+## Blue/green Gemini qualification
+
+`sockswg-bluegreen` adds equal A/B IPv4 WARP slots and switches only new SOCKS
+connections after the active slot fails and the other slot qualifies. In
+addition to Cloudflare and Google HTTP checks, qualification submits a minimal
+request to Gemini's generation endpoint. `BardErrorInfo 1060`, HTTP `429`,
+block pages, timeouts, and malformed replies are rejected. Results are cached
+for one hour per slot and public IP; a changed IP is tested immediately. If
+both slots fail, the current path remains selected while only a drained idle
+slot is repaired, preventing connection flapping.
+
+Run `test_bluegreen_gemini.sh` for the response-classification and failed-cache
+regression tests.
