@@ -16,6 +16,13 @@ wget -N https://raw.githubusercontent.com/vruru/warp-selfheal/main/menu.sh && ba
 
 ### sockswg 高性能 SOCKS 分流
 
+**新增：Soga 无 SOCKS 直连 A/B 模式**。Soga 可通过 `routes.Outs.listen_ipv4`
+绑定源 IP，经策略路由直接进入内核 WARP；健康检测也直接验证对应路径，包含 UDP
+DNS、Google 和 Gemini，网卡创建及修复不再拉起 SOCKS 服务。已完成 Debian 12 /
+Soga 2.16.2 单节点试点，组件、分阶段迁移和回退说明见
+[sockswg/direct](sockswg/direct/README.md)。这是一种可选部署模式，尚未接入
+下方的 `warp p` 一键安装，不会自动改变已有 SOCKS 节点。
+
 `sockswg` 保持应用原有的 `127.0.0.1:40000` SOCKS 分流方式，但把隧道数据面换成 Linux 内核 WireGuard，并由 Dante 或 MicroSocks 提供仅监听本机的 SOCKS5。A/B WARP 均严格为 IPv4-only，不配置 WARP IPv6 地址、`::/0` 或 IPv6 策略规则；没有经过 SOCKS 的流量始终走 VPS 原生出口。纯 IPv6 目的地不受支持。相比单进程用户态 WireProxy，WireGuard 的加解密和转发在内核完成，适合多核、高连接数场景。
 
 ```bash

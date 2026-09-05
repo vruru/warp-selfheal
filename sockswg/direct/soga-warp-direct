@@ -1,0 +1,118 @@
+#!/usr/bin/python3
+"""Soga source-bound WARP A/B routing and direct UDP health probes."""
+import os, sys, subprocess, pathlib, re, time
+
+BASE = pathlib.Path('/etc/soga-warp-direct')
+ROUTES = pathlib.Path('/etc/soga/routes.toml')
+SOURCES = {'a': '172.16.0.2', 'b': '10.203.2.1'}
+
+def run(*args, check=True):
+    return subprocess.run(args, check=check, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+def rule(args):
+    # These priorities must be reserved during deployment; avoid duplicates.
+    priority = args[args.index('priority')+1]
+    if not re.search(r'^'+priority+r':', run('ip','-4','rule').stdout, re.M):
+        run('ip','-4','rule','add',*args)
+
+def ensure():
+    rule(['priority','10030','from',SOURCES['a'],'prohibit'])
+    rule(['priority','10031','from',SOURCES['b'],'prohibit'])
+    rule(['priority','10019','from',SOURCES['b'],'lookup','51823'])
+    run('ip','route','replace','10.203.2.0/30','dev','swgb-host','scope','link','table','51823')
+    run('ip','route','replace','default','via','10.203.2.2','dev','swgb-host','table','51823')
+    ns = ['ip','netns','exec','sockswg-b']
+    rules = run(*ns,'ip','-4','rule').stdout
+    if not re.search(r'^10019:',rules,re.M):
+        run(*ns,'ip','-4','rule','add','priority','10019','from',SOURCES['b'],'lookup','51822')
+    if not re.search(r'^10031:',rules,re.M):
+        run(*ns,'ip','-4','rule','add','priority','10031','from',SOURCES['b'],'prohibit')
+    nat = ['POSTROUTING','-s',SOURCES['b']+'/32','-o','warp-b','-m','comment','--comment','soga-warp-direct','-j','SNAT','--to-source',SOURCES['a']]
+    if run(*ns,'iptables','-t','nat','-C',*nat,check=False).returncode:
+        run(*ns,'iptables','-t','nat','-A',*nat)
+
+def select(slot):
+    if (BASE/'disabled').exists():
+        return
+    ensure()
+    text = ROUTES.read_text()
+    blocks = re.split(r'(?=^\[\[routes.Outs\]\])', text, flags=re.M)
+    changed = False
+    for i, block in enumerate(blocks):
+        # Split off subsequent route header so its fields never enter this outbound.
+        parts = re.split(r'(?=^\[\[routes\]\])', block, maxsplit=1, flags=re.M)
+        out = parts[0]
+        old_socks = (re.search(r'^type\s*=\s*"socks"\s*$',out,re.M)
+                     and re.search(r'^server\s*=\s*"127\.0\.0\.1"\s*$',out,re.M)
+                     and re.search(r'^port\s*=\s*40000\s*$',out,re.M))
+        if old_socks or '# soga-warp-direct managed' in out:
+            replacement = ('[[routes.Outs]]\n# soga-warp-direct managed\n'
+                           'type="direct"\nlisten_ipv4="'+SOURCES[slot]+'"\n'
+                           'listen_strategy="ipv4_first"\n\n')
+            blocks[i] = replacement + ''.join(parts[1:])
+            changed = True
+    if not changed:
+        raise RuntimeError('No managed or local WARP SOCKS outbound found; refusing edit')
+    new = ''.join(blocks)
+    if new != text:
+        import tomllib
+        tomllib.loads(new)
+        # Soga's local file watcher requires a write event on the watched inode.
+        with ROUTES.open('w') as f:
+            f.write(new); f.flush(); os.fsync(f.fileno())
+        (BASE/'selected_at').write_text(str(time.time()))
+        print('Soga WARP direct route selected '+slot+' source='+SOURCES[slot],flush=True)
+    (BASE/'selected').write_text(slot+'\n')
+
+def drained(slot):
+    # Allow the documented route reload interval and old UDP sessions to settle.
+    if time.time()-float((BASE/'selected_at').read_text()) < 180:
+        return False
+    source = SOURCES[slot]
+    tcp = run('ss','-Hntp','state','established','src',source).stdout
+    if any('"soga"' in line for line in tcp.splitlines()):
+        return False
+    # Native ingress UDP shares Soga TCP listening ports. Other source-bound UDP
+    # sockets are conservatively considered live even when they are unconnected.
+    listeners = run('ss','-Hlntp').stdout
+    inbound = {line.split()[3].rsplit(':',1)[-1] for line in listeners.splitlines() if '"soga"' in line}
+    udp = run('ss','-Huanp','src',source).stdout
+    return not any('"soga"' in line and line.split()[3].rsplit(':',1)[-1] not in inbound
+                   for line in udp.splitlines())
+
+def remove():
+    for priority in ['10019','10030','10031']:
+        run('ip','-4','rule','del','priority',priority,check=False)
+    run('ip','route','flush','table','51823',check=False)
+    ns=['ip','netns','exec','sockswg-b']
+    for priority in ['10019','10031']:
+        run(*ns,'ip','-4','rule','del','priority',priority,check=False)
+    run(*ns,'iptables','-t','nat','-D','POSTROUTING','-s',SOURCES['b']+'/32','-o','warp-b','-m','comment','--comment','soga-warp-direct','-j','SNAT','--to-source',SOURCES['a'],check=False)
+
+if __name__ == '__main__':
+    cmd=sys.argv[1]
+    if cmd=='ensure': ensure()
+    elif cmd=='ensure-b':
+        if run('ip','-n','sockswg-b','link','show','warp-b',check=False).returncode:
+            run('/usr/local/sbin/sockswg-bluegreen','prepare-b')
+        ensure()
+    elif cmd=='udp':
+        import socket, struct, secrets
+        tx=secrets.token_bytes(2)
+        question=b''.join(bytes([len(x)])+x.encode() for x in 'example.com'.split('.'))+b'\x00\x00\x01\x00\x01'
+        request=tx+struct.pack('!HHHHH',0x100,1,0,0,0)+question
+        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sock:
+            sock.settimeout(4); sock.bind((sys.argv[2],0)); sock.sendto(request,('1.1.1.1',53))
+            reply,peer=sock.recvfrom(4096)
+        if reply[:2]!=tx or reply[3]&15 or peer!=('1.1.1.1',53):
+            raise SystemExit(1)
+    elif cmd=='select': select(sys.argv[2])
+    elif cmd=='drained': sys.exit(0 if drained(sys.argv[2]) else 1)
+    elif cmd=='remove': remove()
+    elif cmd=='rollback':
+        raise SystemExit('SOCKS-free mode: restore the full before-direct-health backup and services before using legacy SOCKS routes')
+    elif cmd=='reload-file':
+        content=ROUTES.read_text()
+        with ROUTES.open('w') as f:
+            f.write(content); f.flush(); os.fsync(f.fileno())
+    else: raise SystemExit('unknown command')

@@ -1,5 +1,9 @@
 # sockswg
 
+For the optional **SOCKS-free Soga direct WARP A/B mode**, including direct
+health probes and kernel-only tunnel lifecycle, see [direct/README.md](direct/README.md).
+It requires a staged migration; updating this repository does not convert existing nodes.
+
 `sockswg` is the kernel-data-plane SOCKS mode in this repository:
 
 ```text

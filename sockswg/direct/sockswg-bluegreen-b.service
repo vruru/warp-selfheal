@@ -1,0 +1,12 @@
+[Unit]
+Description=Direct WARP B namespace and routing
+After=network-online.target wg-quick@sockswg.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/soga-warp-direct ensure-b
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

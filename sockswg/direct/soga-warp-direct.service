@@ -1,0 +1,13 @@
+[Unit]
+Description=Restore Soga direct WARP routing
+After=wg-quick@sockswg.service sockswg-bluegreen-b.service
+Wants=sockswg-bluegreen-b.service
+Before=soga.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/soga-warp-direct ensure
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
