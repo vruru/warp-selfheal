@@ -17,6 +17,8 @@ FAIL_FILE_V4="$STATE_DIR/failures-v4"
 FAIL_FILE_V6="$STATE_DIR/failures-v6"
 LOCK_FILE="$STATE_DIR/lock"
 DISABLE_FILE="$STATE_DIR/disabled"
+BLUEGREEN_ACTIVE_FILE="${BLUEGREEN_ACTIVE_FILE:-/etc/sockswg-bluegreen/active}"
+BLUEGREEN_SCRIPT="${BLUEGREEN_SCRIPT:-/usr/local/sbin/sockswg-bluegreen}"
 
 log_message() {
   logger -t warp-sockswg-watchdog -- "$*"
@@ -24,6 +26,16 @@ log_message() {
 
 mkdir -p "$STATE_DIR"
 [ -e "$DISABLE_FILE" ] && exit 0
+
+# The frontend may select B. A standalone probe of that frontend must never
+# restart A on B's behalf, or race the blue/green selector. Keep one repair
+# owner; if its timer is unavailable, delegate to its locked state machine.
+if [ -s "$BLUEGREEN_ACTIVE_FILE" ] && [ -x "$BLUEGREEN_SCRIPT" ]; then
+  if systemctl is-active --quiet sockswg-bluegreen-check.timer; then
+    exit 0
+  fi
+  exec "$BLUEGREEN_SCRIPT" check
+fi
 
 if command -v flock >/dev/null 2>&1; then
   exec 9>"$LOCK_FILE"

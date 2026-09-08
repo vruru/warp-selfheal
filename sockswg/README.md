@@ -30,6 +30,13 @@ The watchdog runs every 30 seconds and:
 - rotates `2408`, `4500`, `500`, and `1701` after two consecutive failures.
 
 Run `test_watchdog.sh` for the mocked lifecycle and failover regression tests.
+When blue/green is installed, its checker is the sole A/B repair owner. The
+standalone watchdog exits while the blue/green timer is active; if that timer
+is inactive, it delegates to `sockswg-bluegreen check`, which uses the same
+exclusive lock. This applies to both SOCKS and direct mode. A frontend probe
+must not restart A when the frontend currently selects B.
+Run `python3 test_watchdog_coordination.py` for these ownership regressions.
+
 Dante or MicroSocks is installed from the operating system package repository
 and is not vendored in this repository. On Debian 13, where Dante is absent
 from the official repository, MicroSocks runs as a dedicated system user and
