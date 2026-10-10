@@ -85,3 +85,37 @@ Endpoint = 192.200.144.22:51820`
 		t.Fatal(err)
 	}
 }
+
+// Legacy WARP installers emit one Address line per IP family.
+func TestRepeatedAddressKeepsBothFamilies(t *testing.T) {
+	iniData, err := loadIniConfig(`[Interface]
+Address = 172.16.0.2/32
+Address = 2001:db8::2/128
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addresses, err := parseCIDRNetIP(iniData.Section("Interface"), "Address")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(addresses) != 2 || !addresses[0].Is4() || !addresses[1].Is6() {
+		t.Fatalf("repeated Address lost an IP family: %v", addresses)
+	}
+}
+
+func TestRepeatedAddressResolvesEachEnvironmentValue(t *testing.T) {
+	t.Setenv("WIREPROXY_TEST_V4", "172.16.0.2/32")
+	t.Setenv("WIREPROXY_TEST_V6", "2001:db8::2/128")
+	iniData, err := loadIniConfig("[Interface]\nAddress = $WIREPROXY_TEST_V4\nAddress = $WIREPROXY_TEST_V6\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addresses, err := parseCIDRNetIP(iniData.Section("Interface"), "Address")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(addresses) != 2 || !addresses[0].Is4() || !addresses[1].Is6() {
+		t.Fatalf("repeated environment Address lost an IP family: %v", addresses)
+	}
+}

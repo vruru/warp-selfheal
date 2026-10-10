@@ -89,19 +89,23 @@ func parseString(section *ini.Section, keyName string) (string, error) {
 	if key == nil {
 		return "", errors.New(keyName + " should not be empty")
 	}
-	value := key.String()
+	return resolveStringValue(key.String(), keyName)
+}
+
+func resolveStringValue(value, keyName string) (string, error) {
 	if strings.HasPrefix(value, "$") {
 		if strings.HasPrefix(value, "$$") {
 			return strings.Replace(value, "$$", "$", 1), nil
 		}
+		envName := strings.TrimPrefix(value, "$")
 		var ok bool
-		value, ok = os.LookupEnv(strings.TrimPrefix(value, "$"))
+		value, ok = os.LookupEnv(envName)
 		if !ok {
-			return "", errors.New(keyName + " references unset environment variable " + key.String())
+			return "", errors.New(keyName + " references unset environment variable $" + envName)
 		}
 		return value, nil
 	}
-	return key.String(), nil
+	return value, nil
 }
 
 func parsePort(section *ini.Section, keyName string) (int, error) {
@@ -180,15 +184,17 @@ func parseNetIP(section *ini.Section, keyName string) ([]netip.Addr, error) {
 }
 
 func parseCIDRNetIP(section *ini.Section, keyName string) ([]netip.Addr, error) {
-	key, err := parseString(section, keyName)
-	if err != nil {
-		if strings.Contains(err.Error(), "should not be empty") {
-			return []netip.Addr{}, nil
+	// WARP configurations commonly repeat Address for IPv4 and IPv6. INI's
+	// String returns only the first value, so preserve every shadow value.
+	var keys []string
+	for _, value := range section.Key(strings.ToLower(keyName)).ValueWithShadows() {
+		resolved, err := resolveStringValue(value, keyName)
+		if err != nil {
+			return nil, err
 		}
-		return nil, err
+		keys = append(keys, strings.Split(resolved, ",")...)
 	}
 
-	keys := strings.Split(key, ",")
 	var ips = make([]netip.Addr, 0, len(keys))
 	for _, str := range keys {
 		str = strings.TrimSpace(str)
@@ -480,7 +486,7 @@ func parseResolveConfig(section *ini.Section) (*ResolveConfig, error) {
 
 	resolvStrategy, _ := parseString(section, "ResolveStrategy")
 	config.ResolveStrategy = resolvStrategy
-  
+
 	return config, nil
 }
 
@@ -616,9 +622,9 @@ func ParseConfig(path string) (*Configuration, error) {
 		resolve, err = parseResolveConfig(resolveSection)
 		if err != nil {
 			return nil, err
-	  }
-  }
-    
+		}
+	}
+
 	err = parseRoutinesConfig(&routinesSpawners, cfg, "UDPProxyTunnel", parseUDPProxyTunnelConfig)
 	if err != nil {
 		return nil, err
