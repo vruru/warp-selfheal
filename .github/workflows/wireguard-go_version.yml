@@ -11,9 +11,10 @@ jobs:
 
     name: Cross compile WireGuard-go
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     env:
+      GOTOOLCHAIN: local
       workdir: ./wireguard-go-source
       version: 0.0.20201118
 
@@ -35,7 +36,13 @@ jobs:
       - name: Set up GoReleaser
         uses: actions/setup-go@v4.0.1
         with:
-          go-version: "1.18"
+          go-version: "1.26.9"
+
+      - name: Check WireGuard-go vulnerabilities before release
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          cd ${{ env.workdir }}
+          govulncheck ./...
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4.3.0

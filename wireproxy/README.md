@@ -19,3 +19,12 @@ VERSION=1.1.3-selfheal.1 ./wireproxy/build.sh
 ```
 
 Archive hashes are recorded in [`SHA256SUMS`](SHA256SUMS).
+
+## Go toolchain
+
+The source supports Go 1.26.9 or later. Local automatic toolchain selection,
+CI, and the container use Go 1.27.2, matching the bundled binaries' Go 1.27
+branch while applying its security fixes. The root Go security workflow runs
+unit/race tests, vet, Linux cross compilation, and govulncheck without starting
+a WARP connection or publishing artifacts. Updating source or build settings
+does not rebuild the checked-in archives; validate and publish those separately.
