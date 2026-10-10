@@ -1429,9 +1429,9 @@ selfheal_persist_menu() {
 
 wireproxy_selfheal_expected_sha() {
   case "$ARCHITECTURE" in
-    amd64 ) printf '%s\n' '8bf44d64f13ca9f93645ef84fb438ec2aae1f553f92e4dcbe232990d729c1044' ;;
-    arm64 ) printf '%s\n' '116ba868dcc27670c7f7d34419c88792a070c4d4c7762a08b3a9d1531db5742a' ;;
-    s390x ) printf '%s\n' '95a6f57c08ec6376e95103c372b9544e8f9c01a48cf479b42745a646d84b28b5' ;;
+    amd64 ) printf '%s\n' 'f883d467f72cd2a96cb79e4c5137e32e2b6d61aa5ee7d0ea458319ce3b5bdeb0' ;;
+    arm64 ) printf '%s\n' '19397beaeb1e307a62df4d8ea06f10f0be8c5291d169cd2cd87b712ccde3d9b6' ;;
+    s390x ) printf '%s\n' '724a2b962257fc9c8b44960a6a5bf8ab9d6d27adb1244e02cf052db329b1d49b' ;;
     * ) return 1 ;;
   esac
 }

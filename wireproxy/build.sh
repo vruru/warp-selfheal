@@ -2,7 +2,11 @@
 
 set -euo pipefail
 
-VERSION=${VERSION:-1.1.3-selfheal.1}
+VERSION=${VERSION:-1.1.3-selfheal.2}
+export GOTOOLCHAIN=go1.27.2
+GOVULNCHECK=${GOVULNCHECK:-govulncheck}
+command -v "$GOVULNCHECK" >/dev/null || { echo "govulncheck is required before publishing" >&2; exit 1; }
+command -v upx >/dev/null || { echo "upx is required for supported Linux architectures" >&2; exit 1; }
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 SOURCE_DIR="$SCRIPT_DIR/source"
 STAGE_DIR=$(mktemp -d)
@@ -16,10 +20,16 @@ for arch in amd64 arm64 s390x; do
     CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
       -buildvcs=false \
       -trimpath \
-      -ldflags "-s -w -X main.version=$VERSION" \
+      -ldflags "-X main.version=$VERSION" \
       -o "$output_dir/wireproxy" \
       ./cmd/wireproxy
   )
+  "$GOVULNCHECK" -mode=binary "$output_dir/wireproxy"
+  # UPX does not support s390x; keep that architecture's verified ELF intact.
+  if [ "$arch" != s390x ]; then
+    upx -q "$output_dir/wireproxy"
+    upx -t "$output_dir/wireproxy"
+  fi
   python3 - "$output_dir/wireproxy" "$SCRIPT_DIR/wireproxy_linux_${arch}.tar.gz" <<'PY'
 import gzip
 import os
