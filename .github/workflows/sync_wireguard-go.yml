@@ -51,7 +51,7 @@ jobs:
           govulncheck ./...
 
       - name: Cross compile WireGuard-go
-        uses: goreleaser/goreleaser-action@v4.3.0
+        uses: goreleaser/goreleaser-action@v7.2.3
         if: ${{ env.VERSION != '' }}
         with:
           distribution: goreleaser
