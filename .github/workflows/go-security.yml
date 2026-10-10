@@ -1,0 +1,43 @@
+name: Go security checks
+
+on:
+  push:
+    paths:
+      - 'wireproxy/source/**'
+      - '.github/workflows/go-security.yml'
+  pull_request:
+    paths:
+      - 'wireproxy/source/**'
+      - '.github/workflows/go-security.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wireproxy:
+    runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: local
+    defaults:
+      run:
+        working-directory: wireproxy/source
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache-dependency-path: wireproxy/source/go.sum
+      - name: Unit and race tests
+        run: go test -race ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Cross compile bundled platforms
+        run: |
+          for arch in amd64 arm64 s390x; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -o "$RUNNER_TEMP/wireproxy-$arch" ./cmd/wireproxy
+          done
+      - name: Install vulnerability scanner
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+      - name: Check reachable vulnerabilities
+        run: govulncheck ./...
