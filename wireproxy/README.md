@@ -15,7 +15,7 @@ The regression tests are in [`source/socks_relay_test.go`](source/socks_relay_te
 Build all bundled Linux archives with:
 
 ```bash
-VERSION=1.1.3-selfheal.1 ./wireproxy/build.sh
+VERSION=1.1.3-selfheal.2 ./wireproxy/build.sh
 ```
 
 Archive hashes are recorded in [`SHA256SUMS`](SHA256SUMS).
@@ -27,4 +27,4 @@ CI, and the container use Go 1.27.2, matching the bundled binaries' Go 1.27
 branch while applying its security fixes. The root Go security workflow runs
 unit/race tests, vet, Linux cross compilation, and govulncheck without starting
 a WARP connection or publishing artifacts. Updating source or build settings
-does not rebuild the checked-in archives; validate and publish those separately.
+does not rebuild the checked-in archives automatically. The bundled selfheal.2 archives are rebuilt with Go 1.27.2, include repeated Address dual-stack compatibility, and are scanned before packaging. The build script requires govulncheck and UPX; amd64/arm64 are UPX-packed and s390x remains a verified ELF because UPX does not support that architecture.
